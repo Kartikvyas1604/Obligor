@@ -72,13 +72,13 @@ $$\text{IM}_{\text{siloed}}(P) = \sum_{i \in P} h_i \cdot |\text{notional}_i|$$
 $$\text{IM}_{\text{siloed, combined}} = \text{IM}_{\text{siloed}}(A) + \text{IM}_{\text{siloed}}(B)$$
 
 ### Cross-Party Netted Formula
-1. Union all position legs from Party A and Party B.
-2. Group legs by **underlying risk factor bucket** ($b \in \{\text{SOL}, \text{BTC}, \text{ETH}, \text{AAPL}, \text{MON}, \text{USD}\}$).
-3. Compute the **net signed exposure** across counterparties in each bucket:
+1. **Union Legs:** Merge all position legs from Party A and Party B into a joint evaluation set without revealing individual leg owners outside the computation boundary.
+2. **Bucket Aggregation:** Group all legs by underlying risk factor bucket ($b \in \{\text{SOL}, \text{BTC}, \text{ETH}, \text{AAPL}, \text{MON}, \text{USD}\}$). A short perpetual contract on Drift and a lending supply position on Kamino both resolve to the same underlying `SOL` bucket.
+3. **Net Signed Exposure:** Compute the signed directional exposure across counterparties in each bucket:
    $$E_b = \sum_{i \in b} \text{signedExposureUsd}_i$$
-4. Compute bucket margin under the **conservative max-haircut** in that bucket:
+4. **Conservative Max-Haircut Selection:** Assign bucket initial margin using the highest (most conservative) haircut among all instruments present in that bucket:
    $$\text{IM}_b = \max_{i \in b}(h_i) \cdot |E_b|$$
-5. Compute total portfolio netted initial margin and capital freed:
+5. **Portfolio Margin & Savings:** Compute total portfolio netted initial margin and capital freed:
    $$\text{IM}_{\text{netted, combined}} = \sum_b \text{IM}_b$$
    $$\text{Savings} = \max(0, \text{IM}_{\text{siloed, combined}} - \text{IM}_{\text{netted, combined}})$$
 
