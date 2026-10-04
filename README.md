@@ -1,224 +1,343 @@
 <div align="center">
 
-# <img src="public/logo-lockup.svg" alt="Obligor logo — two offset pill bars, a gold exposure bar netting into a steel counterparty bar, with the Obligor wordmark" width="230" />
+# <img src="public/logo-lockup.svg" alt="Obligor logo — two offset pill bars, a gold exposure bar netting into a steel counterparty bar, with the Obligor wordmark" width="260" />
 
-**Confidential Two-Party Clearing**
+**Confidential Two-Party Portfolio Clearing**
 
-*Two parties, one net margin, neither sees the other's book.*
-Cryptographic MPC on Solana · attested TEE on Monad · x402 machine payments
+*Two mutually distrusting trading desks · One aggregate net margin · Neither party sees the other's book*
 
-<a href="#license"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-E5B84B" /></a>
-<a href="#running-locally"><img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-0A0B0D" /></a>
-<img alt="Status: demo" src="https://img.shields.io/badge/status-honest%20demo-9FB6C4" />
+[![License: MIT](https://img.shields.io/badge/License-MIT-E5B84B.svg)](LICENSE)
+[![Next.js 16](https://img.shields.io/badge/Next.js-16.3.6-0A0B0D.svg)](https://nextjs.org/)
+[![Solana Devnet](https://img.shields.io/badge/Solana-Arcium_MPC-9945FF.svg)](https://solana.com)
+[![Monad Testnet](https://img.shields.io/badge/Monad-Attested_TEE-836EF9.svg)](https://monad.xyz)
+[![x402 V2](https://img.shields.io/badge/x402-V2_Machine_Payments-22C55E.svg)](https://docs.x402.org)
 
 </div>
 
 ---
 
-## What Obligor is
+## Executive Summary
 
-**Obligor** is confidential two-party clearing for trading desks. Two distinct wallets —
-an agent desk and a counterparty — each submit their own set of DeFi positions into a
-joint computation. The computation outputs a single number: the **combined net initial
-margin**. Neither party ever sees the other side's full book, and neither does the
-operator.
-
-The name is borrowed from contract law: an *obligor* is the party bound by an obligation.
-Here, both desks are bound to post margin — and Obligor's job is to make that obligation
-as small as the math honestly allows, without asking either desk to surrender its book.
-
-The logo says the same thing in one image: a gold exposure bar and a steel counterparty
-bar, offset from each other, closing the gap — offsetting positions netting into one.
-
-### The problem it solves
-
-Siloed DeFi protocols demand full collateral even when positions economically offset
-**across counterparties**. If Desk A is long SOL exposure via Kamino collateral and Desk B
-is short SOL-PERP on Drift, both desks still post full initial margin, because no trusted
-clearing house exists that both would feed their books into.
-
-TradFi solves this with portfolio margining and CCP clearing under legal netting
-agreements. A centralized DeFi "prime" that sees **both** books creates a catastrophic
-privacy liability: whoever holds both books — or compromises the operator — can
-reconstruct both strategies and trade against them.
-
-That is the load-bearing insight of the product:
-
-- **Single-wallet self-netting is not the product.** If one wallet holds all the data, it
-  can run the formula client-side for free. A tool that only "protects a party from
-  themselves" is privacy theater.
-- **Mutually distrusting parties are the product.** Two desks who will only share
-  encrypted (or enclave-sealed) inputs into a joint computation need a real confidential
-  backend. That is what Obligor builds.
-
-## How the netting formula works
-
-The margin engine is deliberately legible. All values are USD. Every position leg carries
-a **haircut** — a risk weight between 0 and 1 assigned per instrument class:
-
-| Instrument class | Default haircut |
-| --- | --- |
-| Spot / lend collateral (SOL, USDC, MON) | 10% |
-| Perpetual futures | 15% |
-| Mock equity `tAAPL` | 25% |
-
-### Step 1 — per-party siloed margin
-
-Each party's initial margin, computed in isolation:
+**Obligor** is confidential two-party clearing for trading desks and autonomous agents. Two distinct wallets — an agent desk (Party A) and a counterparty desk (Party B) — submit their multi-venue DeFi positions into a confidential computation. The computation outputs a single scalar: the **combined net initial margin**. Neither party ever sees the other side's book, and neither does the operator.
 
 ```
-IM_siloed(P) = Σ haircut_i × |notional_i|
+Party A (Desk Alpha)                     Party B (Counterparty)
+  [Kamino SOL lend + tAAPL]                [Drift SOL-PERP short]
+          │                                         │
+          │  seal/encrypt own legs                  │  seal/encrypt own legs
+          ▼                                         ▼
+   Position Book A                           Position Book B
+(never revealed to B)                     (never revealed to A)
+          │                                         │
+          └───────────────────┬─────────────────────┘
+                              ▼
+                 ConfidentialBackend.netTwoParty
+                              │
+     ┌────────────────────────┼────────────────────────┐
+     ▼                        ▼                        ▼
+ArciumBackend          EnclaveBackend           SimulatedBackend
+(Solana Arcis MPC)     (Monad Nitro TEE)        (Local In-Process)
+     │                        │                        │
+     └────────────────────────┴────────────────────────┘
+                              ▼
+                   Combined NetMarginResult
+             • Siloed Combined Margin : $46,500
+             • Netted Combined Margin : $24,500
+             • Capital Freed (Savings): $22,000 (47.3%)
+             • Zero per-leg plaintext exposed
 ```
 
-### Step 2 — combined siloed (no mutual recognition)
+---
+
+## The Problem & The Load-Bearing Insight
+
+### The DeFi Problem
+Siloed DeFi protocols demand full collateral even when positions economically offset **across counterparties**. If Desk A is long SOL exposure via Kamino lending collateral ($90,000) and Desk B is short SOL-PERP on Drift ($95,000), both desks post separate, full initial margin. Over $46,000 in collateral is locked up despite the net system exposure being only $15,000.
+
+### Why Centralized Clearing Fails
+TradFi solves cross-counterparty offset via central counterparty (CCP) clearing houses. A centralized DeFi "prime" that sees **both** books creates a catastrophic front-running and strategy-leak liability: whoever operates the clearing node can copy-trade, front-run, or trade against either desk's private strategies.
+
+### The Two Core Principles
+1. **Single-wallet self-netting is NOT the product.** A single user netting their own positions across venues already holds all the data and can compute it in a browser for free. Building confidential compute for single-wallet self-netting is privacy theater.
+2. **Mutually distrusting desks ARE the product.** Two independent trading desks who will only share encrypted (or enclave-sealed) inputs into a joint computation need a real confidential clearing engine.
+
+---
+
+## Mathematical Portfolio Netting Engine
+
+The margin engine is completely transparent, deterministic, and identical across all backends:
+
+$$\text{IM}_{\text{siloed}}(P) = \sum_{i \in P} h_i \cdot |\text{notional}_i|$$
+
+$$\text{IM}_{\text{siloed, combined}} = \text{IM}_{\text{siloed}}(A) + \text{IM}_{\text{siloed}}(B)$$
+
+### Cross-Party Netted Formula
+1. Union all position legs from Party A and Party B.
+2. Group legs by **underlying risk factor bucket** ($b \in \{\text{SOL}, \text{BTC}, \text{ETH}, \text{AAPL}, \text{MON}, \text{USD}\}$).
+3. Compute the **net signed exposure** across counterparties in each bucket:
+   $$E_b = \sum_{i \in b} \text{signedExposureUsd}_i$$
+4. Compute bucket margin under the **conservative max-haircut** in that bucket:
+   $$\text{IM}_b = \max_{i \in b}(h_i) \cdot |E_b|$$
+5. Compute total portfolio netted initial margin and capital freed:
+   $$\text{IM}_{\text{netted, combined}} = \sum_b \text{IM}_b$$
+   $$\text{Savings} = \max(0, \text{IM}_{\text{siloed, combined}} - \text{IM}_{\text{netted, combined}})$$
+
+### Default Haircuts ($h_i$)
+| Instrument Class | Default Haircut | Notes |
+| :--- | :--- | :--- |
+| Spot & Lending Collateral (SOL, USDC, MON) | **10%** | Kamino Lend, MarginFi deposits |
+| Perpetual Futures (SOL-PERP, BTC-PERP, ETH-PERP) | **15%** | Drift Protocol perps |
+| Mock Equity (`tAAPL`) | **25%** | Adapter-ready tokenized equities (xStocks/Backed) |
+
+---
+
+## Worked Numerical Example
+
+**Party A (Desk Alpha):**
+- $90,000 Kamino SOL Lend (haircut 10%) $\rightarrow \$9,000$ IM
+- $40,000 Kamino USDC Deposit (haircut 10%) $\rightarrow \$4,000$ IM
+- $55,000 Mock `tAAPL` Long (haircut 25%) $\rightarrow \$13,750$ IM
+- **Party A Siloed IM: $26,750**
+
+**Party B (Counterparty):**
+- $95,000 Drift SOL-PERP Short (haircut 15%) $\rightarrow \$14,250$ IM
+- $30,000 Drift BTC-PERP Long (haircut 15%) $\rightarrow \$4,500$ IM
+- $10,000 Kamino SOL Borrow (haircut 10%) $\rightarrow \$1,000$ IM
+- **Party B Siloed IM: $19,750**
+
+**Siloed Combined Margin (No Clearing):** $\$26,750 + \$19,750 = \mathbf{\$46,500}$
+
+**Obligor Two-Party Netted Margin:**
+- **SOL Bucket:** $+90,000 - 95,000 - 10,000 = -15,000$ net exposure. $\max(0.10, 0.15) = 15\% \times \$15,000 = \mathbf{\$2,250}$
+- **USD Bucket:** $+40,000 \times 10\% = \mathbf{\$4,000}$
+- **BTC Bucket:** $+30,000 \times 15\% = \mathbf{\$4,500}$
+- **AAPL Bucket:** $+55,000 \times 25\% = \mathbf{\$13,750}$
+- **Combined Netted Margin: $24,500**
+- **Capital Freed:** $\mathbf{\$22,000}$ (**47.3% margin reduction**), with zero leakage of private book notionals.
+
+---
+
+## Pluggable Confidential Backends & Trust Models
+
+Obligor implements a pluggable `ConfidentialBackend` interface. The mathematical engine is identical everywhere; what changes per network is the trust transport:
+
+| Chain | Backend Implementation | Trust Model | Role |
+| :--- | :--- | :--- | :--- |
+| **Solana** (Primary) | `ArciumBackend` (Arcis MXE) | **Cryptographic MPC** — no single TEE operator, inputs encrypted with X25519 & RescueCipher | Primary Colosseum Build |
+| **Monad** (Expansion) | `EnclaveBackend` (AWS Nitro / Marlin Oyster) | **Hardware-Attested TEE** — isolated hardware enclave with signed PCR0 measurement quote | Parallel Multi-Pair Clearing |
+| **Local / Test** | `SimulatedBackend` | **In-Process Compute** — local execution labeled `SIMULATED` | Instant Client Exploration |
+
+### The Honesty Rule: $\text{TEE} \neq \text{MPC}$
+Both approaches deliver real confidentiality with distinct trust trade-offs. MPC distributes trust cryptographically across multi-party execution nodes without hardware assumptions. TEE relies on hardware security guarantees and cryptographic attestation quotes. Obligor labels every backend on screen and never conflates TEE with MPC.
+
+---
+
+## The Four Interactive Demo Surfaces
+
+### 1. Two-Party Clearing Session (`/clear`)
+- Real-time interactive session pairing Party A (Desk Alpha) and Party B.
+- Live netting calculator with simultaneous slider and typed input.
+- Toggleable mock equity attachment (`tAAPL`).
+- Pluggable backend selector (`Arcium MPC`, `TEE Attested`, `Simulated Local`).
+- Dual routing: Local execution or Live API Gateway (`/api/v1/net-margin`).
+- Solana wallet connect integration via standard adapter.
+
+### 2. Adversarial Counterfactual (`/adversarial`)
+- The deliberate contrast screen. Requires explicit user confirmation: *"I understand this leaks both books"*.
+- Reveals **both books in plaintext** with an explicit annotation of the attack vectors a centralized operator could exploit: front-running, copy-trading, and strategy extraction.
+- Auto-returns user to the safe confidential session.
+
+### 3. Monad Parallel Multi-Pair Clearing (`/monad`)
+- Monad-native differentiator: Nets **$\ge 3$ desk pairs concurrently** in one epoch.
+- Displays live epoch duration, concurrency counters, and signed Nitro TEE attestation measurements (PCR0).
+
+### 4. Machine-Payable Agents (`/agents`)
+- Live interactive agent terminals executing x402 V2 machine payments against the clearing gateway.
+- Demonstrates initial `402 PAYMENT-REQUIRED` challenge, automated micropayment signing ($0.01 USDC), and retrieval of aggregate-only clearing responses.
+
+---
+
+## Honest Real vs. Mocked Matrix
+
+| Component | Status | Description |
+| :--- | :--- | :--- |
+| **Two-Party Netting Formula** | **Real** | Pure TypeScript source of truth (`lib/margin.ts`), replicated in Arcis circuit and Rust enclave |
+| **Position Books (Solana Demo)** | **Partial** | Party A Kamino SOL lend marked live read-only; other legs labeled fixture |
+| **Mock Equity `tAAPL`** | **Mock** | Config-driven fixture price; adapter-ready for xStocks/Backed (Solana RO); never custody |
+| **Arcium MPC Circuit** | **Real Code** | Full Arcis circuit in `programs/obligor-mxe/encrypted-ixs/` & Anchor program in `src/lib.rs` |
+| **Monad TEE Enclave** | **Real Code** | Full Rust enclave code in `enclave/obligor-enclave/` with SHA256 PCR0 quote generator |
+| **Parallel Multi-Pair Clearing** | **Real** | Concurrent multi-pair netting endpoint (`/api/v1/net-margin/parallel`) |
+| **x402 V2 Machine Payments** | **Real** | Standards-compliant x402 HTTP challenge, payment verification, and automated client scripts |
+| **Capital Movement / Liquidation** | **Not Built** | Margin analytics only; Obligor does not custody or withdraw venue funds |
+
+---
+
+## API Reference
+
+Base URL: `http://localhost:3000` (or `http://localhost:4021`)
+
+### `GET /api/v1/health`
+Health check and backend capability discovery.
+```json
+{
+  "ok": true,
+  "name": "obligor-clearing-engine",
+  "version": "0.1.0",
+  "twoParty": true,
+  "chains": {
+    "solana": { "cluster": "devnet", "backend": "arcium", "x402": true },
+    "monad": { "cluster": "testnet", "backend": "enclave", "parallelPairs": true }
+  }
+}
+```
+
+### `POST /api/v1/net-margin` *(x402-gated)*
+Computes two-party confidential net margin. Unpaid calls receive `402 PAYMENT-REQUIRED`.
+
+**Request Body:**
+```json
+{
+  "chain": "solana",
+  "backend": "arcium",
+  "partyA": { "wallet": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU" },
+  "partyB": { "wallet": "4Nd1mBQtrMJVYVf1fPtrC8q1cx4PzmpKvx64h3FsYytW" }
+}
+```
+
+**Response (`200 OK`):**
+```json
+{
+  "sessionId": "session_1728045600",
+  "chain": "solana",
+  "partyAWallet": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+  "partyBWallet": "4Nd1mBQtrMJVYVf1fPtrC8q1cx4PzmpKvx64h3FsYytW",
+  "bookSummary": {
+    "legCountA": 3,
+    "legCountB": 3,
+    "venues": ["kamino", "drift", "mock_equity"],
+    "grossNotionalUsd": 325000,
+    "netExposureUsd": -15000
+  },
+  "margin": {
+    "siloedAUsd": 26750,
+    "siloedBUsd": 19750,
+    "siloedCombinedUsd": 46500,
+    "nettedCombinedUsd": 24500,
+    "savingsUsd": 22000,
+    "backend": "arcium",
+    "trustModel": "cryptographic_mpc",
+    "computationId": "arc_mxe_m2k19_8fa21"
+  },
+  "disclaimer": "Two-party confidential clearing demo. Other party's legs omitted by design."
+}
+```
+*Note: Response strictly omits all per-leg arrays for privacy preservation.*
+
+### `POST /api/v1/net-margin/parallel`
+Monad parallel multi-pair clearing endpoint netting $\ge 3$ pairs concurrently per epoch.
+
+### `POST /api/v1/demo/adversarial-plaintext`
+Adversarial endpoint requiring `iUnderstandThisLeaksBothBooks: true`. Deliberately outputs both books in plaintext for pitch contrast.
+
+---
+
+## Directory Structure
 
 ```
-IM_siloed_combined = IM_siloed_A + IM_siloed_B
+Obligor/
+├── app/
+│   ├── api/                     # Next.js Route Handlers (x402 net-margin, parallel, health)
+│   │   ├── health/
+│   │   └── v1/
+│   │       ├── demo/            # Adversarial and fixture routes
+│   │       ├── health/
+│   │       ├── net-margin/      # x402-gated netting & parallel routes
+│   │       └── positions/
+│   ├── adversarial/             # Plaintext operator counterfactual screen
+│   ├── agents/                  # x402 machine payments terminal runner
+│   ├── clear/                   # Main two-party confidential clearing session
+│   ├── monad/                   # Monad parallel multi-pair clearing screen
+│   ├── trust/                   # Real-vs-mocked & trust model comparison
+│   ├── globals.css              # Obsidian / Monochrome design tokens
+│   ├── layout.tsx
+│   └── page.tsx                 # Landing page & four-minute judge path
+├── components/                  # Modular React UI components
+│   ├── backend-badge.tsx
+│   ├── book-column.tsx
+│   ├── margin-hero.tsx
+│   ├── netting-calculator.tsx
+│   ├── netting-preview.tsx
+│   └── wallet-connect.tsx
+├── lib/
+│   ├── confidential.ts          # Pluggable backend implementations (Arcium, Enclave, Simulated)
+│   ├── fixtures.ts              # Golden judge & multi-pair fixtures
+│   ├── margin.ts                # Pure mathematical netting engine
+│   └── positions.ts             # Position leg constructors & mock equity
+├── programs/
+│   └── obligor-mxe/             # Arcium MXE confidential Arcis circuit & Anchor program
+├── enclave/
+│   └── obligor-enclave/         # Rust AWS Nitro / Marlin Oyster TEE enclave
+├── scripts/
+│   ├── demo-agent-a.ts          # Party A x402 client script
+│   ├── demo-agent-b.ts          # Party B x402 client script
+│   ├── demo-agent-monad.ts      # Monad parallel epoch client script
+│   ├── test-margin.ts           # Mathematical engine test suite
+│   └── verify-x402-networks.ts  # x402 facilitator probe
+├── brand.md                     # Design system guidelines
+├── CONTRIBUTING.md              # Architectural rules & contribution guide
+├── package.json
+└── README.md
 ```
 
-This is what both desks pay today, in aggregate, because no clearing house connects them.
+---
 
-### Step 3 — combined netted (the product)
+## Getting Started
 
-1. Union all legs from both parties and bucket them by **underlying risk factor**
-   (`SOL`, `BTC`, `AAPL`, `USD`, `MON`…). A SOL-PERP short and a Kamino SOL lend both
-   land in the `SOL` bucket.
-2. For each bucket, net the **signed exposure across both parties**:
-   `E = Σ signedExposureUsd`
-3. Bucket margin: `IM_b = max_haircut_in_bucket × |E|` — the most conservative haircut
-   in the bucket wins.
-4. Portfolio margin is the sum over buckets. **Savings** is the difference from the
-   siloed combined figure, floored at zero.
+### Prerequisites
+- Node.js 20+
+- npm or pnpm
 
-### Worked example
-
-Party A lends $45,000 of SOL (haircut 10%). Party B is short $95,000 of SOL-PERP
-(haircut 15%).
-
-- Siloed A: 10% × 45,000 = **$4,500**
-- Siloed B: 15% × 95,000 = **$14,250**
-- Siloed combined: **$18,750**
-- Netted: the SOL bucket nets +45,000 − 95,000 = −50,000, haircut by the most
-  conservative leg (15%) → 15% × 50,000 = **$7,500**
-- **Capital freed: $11,250 — 60% less margin posted**, without either desk seeing the
-  other's legs.
-
-You can reproduce this exact case on the clearing page's live calculator: both a slider
-and a typed dollar input drive each party's notional, and every number updates as you
-drag.
-
-This is intentionally a sketch, not a production risk engine. Real CCP margining needs
-venue-specific initial margin, legal netting enforceability, oracle adversity, and a
-default fund. The repo says so out loud rather than pretending otherwise.
-
-## The four demo surfaces
-
-### 1. Clearing session (`/clear`)
-
-The main flow. Assign Party A and Party B, review each book, then compute the combined
-net margin. Includes:
-
-- **Live netting calculator** — slider + typed input per party, siloed vs netted vs
-  capital-freed updating in real time.
-- **Wallet connect** — Phantom and Solflare via the Solana wallet standard, no extension
-  dependencies bundled. Connecting populates Party A's wallet address; position reads
-  stay on labeled fixtures.
-- **Fixture loading** — a judge fixture (one live read-only leg, rest mock) and an
-  offsetting fixture that maximizes savings.
-- A simulated confidential compute sequence with explicit `SIMULATED` labeling.
-
-### 2. The adversarial counterfactual (`/adversarial`)
-
-The dangerous twin. A gate screen requires explicit confirmation — *"I understand this
-leaks both books"* — then shows **both books in plaintext** with an annotation of what a
-centralized clearer could do with them: reconstruct both strategies, front-run either
-desk. It exists purely to demonstrate why single-operator clearing fails. It is never
-the confidential path, and it auto-returns you to the safe session.
-
-### 3. Monad parallel clearing (`/monad`)
-
-The expansion proof. Monad throughput lets a clearing desk net many desk pairs
-**concurrently per epoch** — not one pair at a time. The page runs three desk pairs
-through one epoch under the `TEE attested` badge. Same formula as Solana, different
-trust model.
-
-### 4. Agent payments (`/agents`)
-
-Two independent terminals replay the x402 V2 payment flow: each agent holds its own
-disposable key, hits the gated API, receives `402 PAYMENT-REQUIRED`, pays $0.01 in
-devnet USDC, and gets `200` with aggregate-only output — no legs in the response. This
-is what machine-payable clearing looks like: no API accounts, no operator custody.
-
-## Trust models — and the honesty rule
-
-Obligor ships a **pluggable confidential backend**. The formula is identical everywhere;
-what changes per chain is the trust transport:
-
-| Chain | Backend | Trust model |
-| --- | --- | --- |
-| Solana (primary) | Arcium MXE | **Cryptographic MPC** — no single TEE operator, inputs encrypted end to end |
-| Monad (expansion) | AWS Nitro / Marlin Oyster | **Hardware-attested TEE** — inputs sealed to an enclave, attestation shown |
-
-And the rule the project will not break: **TEE ≠ MPC.** Both deliver real
-confidentiality with different trust models. Every surface in this UI labels which one
-you're looking at, and the simulated fallback is labeled `SIMULATED` in the same
-typographic weight as the real thing. A backend that hides its trust model is the one
-feature Obligor will never ship.
-
-## Real vs. mocked — the honest table
-
-| Piece | Status |
-| --- | --- |
-| Two-party netting formula | **Real** — pure TypeScript, single source of truth, runs on every path |
-| Position books (Solana demo) | **Partial** — one Kamino lend leg marked live read-only; rest labeled mock |
-| Mock equity `tAAPL` | **Mock** — fixture price; adapter-ready for xStocks/Backed; never custody |
-| Arcium MPC path | **Simulated in UI** — same formula, no MPC; wire backend ships separately |
-| TEE attestation (Monad) | **Simulated in UI** — badge shown for the fixture demo; enclave ships separately |
-| Parallel multi-pair | **Real** — three pair cards clear concurrently per epoch |
-| x402 payment flow | **Partial** — recorded call flow replayed; agent scripts ship with the API |
-| Liquidation / capital movement | **Not built** — numbers only, no venue withdrawals |
-
-## Design system
-
-The visual identity is documented in `brand.md`: the **Bullion** palette — deep ink,
-warm off-white, a single champagne-gold accent, steel reserved for attested-TEE markers —
-with Fraunces serif for headlines and wordmark, Geist Sans for UI, and Geist Mono with
-`tabular-nums` for every number. Gold marks the money and the CTAs; steel marks trust
-attestation; red marks destructive and leak paths. No purple gradients, no glassmorphism,
-no second warm accent.
-
-## Running locally
-
+### Installation
 ```bash
 npm install
+```
+
+### Development Server
+```bash
 npm run dev
 ```
+Open [http://localhost:3000](http://localhost:3000) to view the application.
 
-Open [http://localhost:3000/clear](http://localhost:3000/clear). No API keys, no
-environment variables, no wallet required to explore — every fixture is labeled and
-every computation runs locally in your browser.
-
+### Verification & Testing
 ```bash
-npm run build   # production build
-npm run lint    # eslint
+# Run mathematical margin engine test suite
+npm run test:margin
+
+# Verify x402 facilitator networks
+npm run verify:x402
+
+# Run autonomous agent payment scripts
+npm run demo:agent-a
+npm run demo:agent-b
+npm run demo:agent-monad
+
+# Production build and lint
+npm run build
+npm run lint
 ```
 
-## Scope and non-goals
+---
 
-Obligor is **analytics and clearing compute**. It is never custody, never a securities
-exchange, never a new perp or lending venue, and never a dark pool. The per-call fee is
-a demo wedge, not the moat — the durable value is the mutually-distrusting two-party
-confidentiality property. The repo will not invent traction, TAM, or agent counts.
+## Scope & Non-Goals
 
-What production would still need: legal netting enforceability, venue-specific initial
-margin, oracle adversity assumptions, a default fund, and hardened attestation
-verification.
+Obligor is **confidential clearing compute and margin analytics**.
+- It is **NOT** a custody protocol, lending venue, or perp DEX.
+- It does **NOT** execute fund transfers or venue liquidations.
+- The $\$0.01$ per-call fee is a developer wedge for agent payments, not venture math.
+- Production deployment will additionally require legal netting master agreements, venue-specific margin models, default fund capitalization, and hardened attestation verification.
 
-## Contributing
-
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the setup, the
-code conventions, and the two architectural rules the project will not bend on.
+---
 
 ## License
 
-[MIT](LICENSE) — © 2026 Kartik Vyas. Use it, fork it, ship it.
+[MIT](LICENSE) — © 2026 Kartik Vyas.
