@@ -1,12 +1,17 @@
 {
-  "name": "luthren",
+  "name": "obligor",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:margin": "tsx scripts/test-margin.ts",
+    "verify:x402": "tsx scripts/verify-x402-networks.ts",
+    "demo:agent-a": "tsx scripts/demo-agent-a.ts",
+    "demo:agent-b": "tsx scripts/demo-agent-b.ts",
+    "demo:agent-monad": "tsx scripts/demo-agent-monad.ts"
   },
   "dependencies": {
     "lucide-react": "^1.48.0",
@@ -22,6 +27,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
     "tailwindcss": "^4",
+    "tsx": "^4.19.3",
     "typescript": "^5"
   }
 }
