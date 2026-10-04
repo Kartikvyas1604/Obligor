@@ -348,15 +348,14 @@ npm run lint
 ---
 
 ## Scope & Non-Goals
-
-Obligor is **confidential clearing compute and margin analytics**.
-- It is **NOT** a custody protocol, lending venue, or perp DEX.
-- It does **NOT** execute fund transfers or venue liquidations.
-- The $\$0.01$ per-call fee is a developer wedge for agent payments, not venture math.
+Obligor is **pure clearing compute and margin risk analytics**.
+- It is **NOT** a custody protocol, lending pool, or decentralized exchange.
+- It does **NOT** execute collateral transfers, margin calls, or venue liquidations.
+- The $\$0.01$ per-call fee is a developer wedge for autonomous agent settlement via x402, not venture math.
 - Production deployment will additionally require legal netting master agreements, venue-specific margin models, default fund capitalization, and hardened attestation verification.
 
 ---
 
-## License
-
-[MIT](LICENSE) — © 2026 Kartik Vyas.
+## Contributing & License
+- Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for architectural invariants and code conventions.
+- Licensed under [MIT](LICENSE) — © 2026 Kartik Vyas. Use it, fork it, ship it.
