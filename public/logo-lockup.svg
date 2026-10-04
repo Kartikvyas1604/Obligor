@@ -1,11 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 236 72" width="236" height="72" role="img" aria-label="Obligor">
-  <style>
-    .word { fill: #211D16; }
-    @media (prefers-color-scheme: dark) {
-      .word { fill: #F2EFE8; }
-    }
-  </style>
-  <rect x="0" y="26" width="30" height="10" rx="5" fill="#E5B84B"/>
-  <rect x="7" y="40" width="30" height="10" rx="5" fill="#9FB6C4"/>
-  <text x="48" y="50" font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="46" class="word">Obligor</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 48" fill="none" role="img" aria-label="Obligor">
+  <defs>
+    <linearGradient id="gold-bright-lockup" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E8C874" />
+      <stop offset="50%" stop-color="#C59A3F" />
+      <stop offset="100%" stop-color="#A67C27" />
+    </linearGradient>
+    <linearGradient id="gold-dark-lockup" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6E5C3D" />
+      <stop offset="50%" stop-color="#4A3D25" />
+      <stop offset="100%" stop-color="#312818" />
+    </linearGradient>
+    <linearGradient id="gold-text-lockup" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E8C874" />
+      <stop offset="50%" stop-color="#C59A3F" />
+      <stop offset="100%" stop-color="#A67C27" />
+    </linearGradient>
+  </defs>
+
+  <!-- Offset Logo Pills (No border box) -->
+  <g transform="translate(0, 8)">
+    <rect x="12" y="16" width="36" height="16" rx="8" fill="url(#gold-dark-lockup)" />
+    <rect x="0" y="0" width="36" height="16" rx="8" fill="url(#gold-bright-lockup)" />
+  </g>
+
+  <!-- Clean Wordmark (No border box) -->
+  <text x="64" y="34" font-family="'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" font-weight="600" font-size="30" letter-spacing="0.5" fill="url(#gold-text-lockup)">Obligor</text>
 </svg>
