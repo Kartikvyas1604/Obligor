@@ -136,27 +136,30 @@ Both approaches deliver real confidentiality with distinct trust trade-offs:
 ---
 
 ## The Four Interactive Demo Surfaces
+Explore all four surfaces directly in your browser:
 
 ### 1. Two-Party Clearing Session (`/clear`)
-- Real-time interactive session pairing Party A (Desk Alpha) and Party B.
-- Live netting calculator with simultaneous slider and typed input.
-- Toggleable mock equity attachment (`tAAPL`).
-- Pluggable backend selector (`Arcium MPC`, `TEE Attested`, `Simulated Local`).
-- Dual routing: Local execution or Live API Gateway (`/api/v1/net-margin`).
-- Solana wallet connect integration via standard adapter.
+- **Interactive Portfolio Setup:** Pair Party A (Desk Alpha) and Party B (Counterparty Desk) via Solana wallet connect or pre-loaded fixtures.
+- **Live Netting Calculator:** Real-time dual slider and typed numerical inputs showing instant siloed vs netted margins.
+- **Mock Equity Injection:** Dynamically attach or detach tokenized equity positions (`tAAPL` Long/Short) to evaluate cross-asset clearing.
+- **Pluggable Backend Toggle:** Switch seamlessly between `Arcium MPC` (Solana), `TEE Attested` (Monad), and `Simulated Local`.
+- **Live API Routing:** Option to route clearing computations through the live Next.js API gateway (`/api/v1/net-margin`).
 
 ### 2. Adversarial Counterfactual (`/adversarial`)
-- The deliberate contrast screen. Requires explicit user confirmation: *"I understand this leaks both books"*.
-- Reveals **both books in plaintext** with an explicit annotation of the attack vectors a centralized operator could exploit: front-running, copy-trading, and strategy extraction.
-- Auto-returns user to the safe confidential session.
+- **The Contrast Screen:** Demonstrates why centralized single-operator clearing is broken.
+- **Confirmation Gate:** Requires deliberate user acknowledgment: *"I understand this leaks both books"*.
+- **Plaintext Threat Vector View:** Displays **both books side-by-side** with annotations detailing operator front-running, strategy extraction, and copy-trading vulnerabilities.
+- **Auto-Return Timer:** Safely returns user to the confidential session after review.
 
 ### 3. Monad Parallel Multi-Pair Clearing (`/monad`)
-- Monad-native differentiator: Nets **$\ge 3$ desk pairs concurrently** in one epoch.
-- Displays live epoch duration, concurrency counters, and signed Nitro TEE attestation measurements (PCR0).
+- **Monad High-Throughput Differentiator:** Simultaneously nets **$\ge 3$ desk pairs** in one epoch.
+- **Real-Time Concurrency Telemetry:** Live epoch execution timer, concurrency counter, and per-pair capital savings cards.
+- **Hardware Attestation Inspector:** Real-time PCR0 measurement and SHA256 enclave quote verification.
 
 ### 4. Machine-Payable Agents (`/agents`)
-- Live interactive agent terminals executing x402 V2 machine payments against the clearing gateway.
-- Demonstrates initial `402 PAYMENT-REQUIRED` challenge, automated micropayment signing ($0.01 USDC), and retrieval of aggregate-only clearing responses.
+- **x402 V2 Terminal Runners:** Autonomous agents querying the gated clearing API.
+- **HTTP 402 Protocol Flow:** Demonstrates `402 PAYMENT-REQUIRED` challenge handling, automated $0.01 USDC payment signing, and instant `200 OK` aggregate margin response.
+- **Privacy Audit Inspector:** Expandable raw JSON viewer proving zero individual leg leakage.
 
 ---
 
