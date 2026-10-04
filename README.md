@@ -164,6 +164,7 @@ Explore all four surfaces directly in your browser:
 ---
 
 ## Honest Real vs. Mocked Matrix
+Obligor explicitly labels what is real code, what is fixture, and what is out of MVP scope:
 
 | Component | Status | Description |
 | :--- | :--- | :--- |
