@@ -199,7 +199,10 @@ Health check and backend capability discovery.
 ```
 
 ### `POST /api/v1/net-margin` *(x402-gated)*
-Computes two-party confidential net margin. Unpaid calls receive `402 PAYMENT-REQUIRED`.
+Computes two-party confidential net margin. Unpaid calls receive `402 PAYMENT-REQUIRED` with standard `WWW-Authenticate` payment challenge headers.
+
+**Payment Headers:**
+- `x-payment-signature: <signature>` or `authorization: Bearer <sig>`
 
 **Request Body:**
 ```json
@@ -238,7 +241,8 @@ Computes two-party confidential net margin. Unpaid calls receive `402 PAYMENT-RE
   "disclaimer": "Two-party confidential clearing demo. Other party's legs omitted by design."
 }
 ```
-*Note: Response strictly omits all per-leg arrays for privacy preservation.*
+
+> **Strict Privacy Invariant:** The confidential endpoint response strictly omits all individual position legs (`legs` array). Only aggregate book counts, venue lists, and net margin scalars are returned. Full legs remain private to each party's local wallet.
 
 ### `POST /api/v1/net-margin/parallel`
 Monad parallel multi-pair clearing endpoint netting $\ge 3$ pairs concurrently per epoch.
