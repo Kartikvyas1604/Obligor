@@ -286,8 +286,12 @@ Obligor/
 │   └── positions.ts             # Position leg constructors & mock equity
 ├── programs/
 │   └── obligor-mxe/             # Arcium MXE confidential Arcis circuit & Anchor program
+│       ├── encrypted-ixs/       # Arcis two_party_portfolio_net confidential circuit
+│       └── src/lib.rs           # Anchor clearing session queue & callback handlers
 ├── enclave/
 │   └── obligor-enclave/         # Rust AWS Nitro / Marlin Oyster TEE enclave
+│       ├── Cargo.toml           # Enclave dependencies (sha2, hex, serde)
+│       └── src/main.rs          # Fixed-point two-party netting & PCR0 attestation generator
 ├── scripts/
 │   ├── demo-agent-a.ts          # Party A x402 client script
 │   ├── demo-agent-b.ts          # Party B x402 client script
