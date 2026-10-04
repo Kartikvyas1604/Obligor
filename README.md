@@ -325,18 +325,22 @@ Open [http://localhost:3000](http://localhost:3000) to view the application.
 
 ### Verification & Testing
 ```bash
-# Run mathematical margin engine test suite
+# 1. Run mathematical margin engine test suite (pure TS unit tests)
 npm run test:margin
 
-# Verify x402 facilitator networks
+# 2. Verify x402 facilitator networks on Solana devnet and Monad testnet
 npm run verify:x402
 
-# Run autonomous agent payment scripts
+# 3. Run autonomous Party A x402 payment client agent
 npm run demo:agent-a
+
+# 4. Run autonomous Party B independent payment client agent
 npm run demo:agent-b
+
+# 5. Run autonomous Monad parallel multi-pair epoch clearing agent
 npm run demo:agent-monad
 
-# Production build and lint
+# 6. Run production build & ESLint validation
 npm run build
 npm run lint
 ```
