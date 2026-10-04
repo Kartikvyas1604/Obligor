@@ -1,5 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="13" fill="#0A0B0D"/>
-  <rect x="9" y="17" width="38" height="12" rx="6" fill="#E5B84B"/>
-  <rect x="17" y="35" width="38" height="12" rx="6" fill="#9FB6C4"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <!-- Bright Gold Gradient (Top Pill) -->
+    <linearGradient id="icon-gold-bright" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E8C874" />
+      <stop offset="50%" stop-color="#C59A3F" />
+      <stop offset="100%" stop-color="#A67C27" />
+    </linearGradient>
+    <!-- Muted Bronze Gradient (Bottom Pill) -->
+    <linearGradient id="icon-gold-dark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6E5C3D" />
+      <stop offset="50%" stop-color="#4A3D25" />
+      <stop offset="100%" stop-color="#312818" />
+    </linearGradient>
+  </defs>
+
+  <!-- Deep Black Squircle Background -->
+  <rect width="64" height="64" rx="16" fill="#000000" />
+  
+  <!-- Subtle Border on App Icon -->
+  <rect x="0.5" y="0.5" width="63" height="63" rx="15.5" stroke="#1F1F1F" />
+
+  <!-- Bottom Muted Bronze Pill (Offset Right) -->
+  <rect x="18" y="34" width="38" height="14" rx="7" fill="url(#icon-gold-dark)" />
+
+  <!-- Top Bright Gold Pill (Offset Left) -->
+  <rect x="8" y="16" width="38" height="14" rx="7" fill="url(#icon-gold-bright)" />
 </svg>
