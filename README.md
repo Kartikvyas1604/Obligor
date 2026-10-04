@@ -108,12 +108,12 @@ $$\text{IM}_{\text{siloed, combined}} = \text{IM}_{\text{siloed}}(A) + \text{IM}
 **Siloed Combined Margin (No Clearing):** $\$26,750 + \$19,750 = \mathbf{\$46,500}$
 
 **Obligor Two-Party Netted Margin:**
-- **SOL Bucket:** $+90,000 - 95,000 - 10,000 = -15,000$ net exposure. $\max(0.10, 0.15) = 15\% \times \$15,000 = \mathbf{\$2,250}$
+- **SOL Bucket:** $+90,000 - 95,000 - 10,000 = -15,000$ net directional exposure. $\max(0.10, 0.15) = 15\% \times \$15,000 = \mathbf{\$2,250}$ (saves $\$13,000$ vs isolated IM)
 - **USD Bucket:** $+40,000 \times 10\% = \mathbf{\$4,000}$
 - **BTC Bucket:** $+30,000 \times 15\% = \mathbf{\$4,500}$
 - **AAPL Bucket:** $+55,000 \times 25\% = \mathbf{\$13,750}$
-- **Combined Netted Margin: $24,500**
-- **Capital Freed:** $\mathbf{\$22,000}$ (**47.3% margin reduction**), with zero leakage of private book notionals.
+- **Combined Netted Margin:** $\mathbf{\$24,500}$
+- **Capital Freed (Savings):** $\mathbf{\$22,000}$ (**47.3% margin reduction**), with zero leakage of private book notionals.
 
 ---
 
