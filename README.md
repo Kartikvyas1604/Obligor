@@ -128,7 +128,10 @@ Obligor implements a pluggable `ConfidentialBackend` interface. The mathematical
 | **Local / Test** | `SimulatedBackend` | **In-Process Compute** — local execution labeled `SIMULATED` | Instant Client Exploration |
 
 ### The Honesty Rule: $\text{TEE} \neq \text{MPC}$
-Both approaches deliver real confidentiality with distinct trust trade-offs. MPC distributes trust cryptographically across multi-party execution nodes without hardware assumptions. TEE relies on hardware security guarantees and cryptographic attestation quotes. Obligor labels every backend on screen and never conflates TEE with MPC.
+Both approaches deliver real confidentiality with distinct trust trade-offs:
+- **Cryptographic MPC (Arcium):** Distributes trust across multi-party execution nodes using threshold cryptography. No single entity, cloud provider, or hardware manufacturer can observe decrypted books.
+- **Hardware-Attested TEE (AWS Nitro / Marlin Oyster):** Relies on isolated CPU secure enclaves and cryptographic PCR0 attestation quotes. Delivers high execution throughput suitable for Monad's parallel architecture.
+- **Obligor's Rule:** Obligor labels every backend on screen and in API responses. We never conflate TEE with MPC.
 
 ---
 
