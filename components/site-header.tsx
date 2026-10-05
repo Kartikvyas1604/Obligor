@@ -27,6 +27,13 @@ export function SiteHeader() {
               Clearing
             </Link>
             <Link
+              href="/deal"
+              className="text-[#E8C874] font-semibold transition-colors duration-150 hover:text-white flex items-center gap-1"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>P2P Deal Rooms</span>
+            </Link>
+            <Link
               href="/monad"
               className="text-[#94A3B8] transition-colors duration-150 hover:text-white font-medium"
             >
