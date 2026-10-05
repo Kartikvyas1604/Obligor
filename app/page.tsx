@@ -13,6 +13,8 @@ import {
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { HeroMockup } from "@/components/hero-mockup";
+import { ProfitCalculator } from "@/components/profit-calculator";
+import { HowItWorksVisual } from "@/components/how-it-works-visual";
 
 export default function Home() {
   return (
@@ -66,7 +68,7 @@ export default function Home() {
                     href="/clear"
                     className="group inline-flex h-14 items-center justify-center gap-3 rounded-full bg-gradient-to-r from-[#E8C874] via-[#C59A3F] to-[#A67C27] px-8 text-base font-semibold text-black transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-[0_4px_25px_rgba(197,154,63,0.25)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8C874]"
                   >
-                    <span>Launch Clearing Demo</span>
+                    <span>Launch Clearing Terminal</span>
                     <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
                   </Link>
 
@@ -101,6 +103,24 @@ export default function Home() {
                 <HeroMockup />
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* ========================================================================= */}
+        {/* INTERACTIVE PROFIT & CAPITAL CALCULATOR                                    */}
+        {/* ========================================================================= */}
+        <section className="border-b border-[#1F1F1F] bg-[#000000] py-16 sm:py-24">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <ProfitCalculator />
+          </div>
+        </section>
+
+        {/* ========================================================================= */}
+        {/* 3-STEP VISUAL STORYBOARD                                                  */}
+        {/* ========================================================================= */}
+        <section className="border-b border-[#1F1F1F] bg-[#050505] py-16 sm:py-24">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <HowItWorksVisual />
           </div>
         </section>
 
