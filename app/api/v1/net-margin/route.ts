@@ -5,7 +5,7 @@ import { env, chainSchema } from "@/lib/env";
 import { getConfidentialBackend } from "@/lib/confidential";
 import { priceAndNormalizeLegs } from "@/lib/positions";
 import { makeLogger } from "@/lib/logger";
-import type { BackendKind, PositionLeg } from "@/lib/margin";
+import type { BackendKind } from "@/lib/margin";
 
 const log = makeLogger("net-margin");
 

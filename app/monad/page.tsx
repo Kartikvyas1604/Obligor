@@ -73,8 +73,6 @@ export default function MonadPage() {
     return () => timers.forEach(clearTimeout);
   }, []);
 
-  const concurrency = pairResults.size;
-
   async function loadDemoPairs(): Promise<DemoPair[] | null> {
     const res = await fetch("/api/v1/demo/fixture-parallel-pairs", { method: "POST" });
     if (!res.ok) {
@@ -97,7 +95,8 @@ export default function MonadPage() {
   }
 
   useEffect(() => {
-    if (pairs.length === 0) void preloadPairs();
+    const t = setTimeout(() => void preloadPairs(), 0);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

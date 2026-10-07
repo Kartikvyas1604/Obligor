@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ApiError, parseBody, rateLimitFor, readJsonBody, withApi } from "@/lib/http";
 import { env } from "@/lib/env";
 import { adversarialBooks } from "@/lib/fixtures";
-import { twoPartyNetted, twoPartySiloed, type PositionBook } from "@/lib/margin";
+import { twoPartyNetted, twoPartySiloed } from "@/lib/margin";
 
 const bodySchema = z.object({
   iUnderstandThisLeaksBothBooks: z.literal(true),

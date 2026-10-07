@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft, ShieldAlert, LoaderCircle, RotateCcw } from "lucide-react";
@@ -63,7 +63,9 @@ export default function AdversarialPage() {
 
   useEffect(() => {
     if (!confirmed) return;
-    void loadBooks();
+    // Defer out of the effect body so state updates don't cascade renders.
+    const t = setTimeout(() => void loadBooks(), 0);
+    return () => clearTimeout(t);
   }, [confirmed]);
 
   useEffect(() => {
@@ -147,7 +149,7 @@ export default function AdversarialPage() {
       <PageShell>
         <div className="py-24 text-center space-y-3" aria-live="polite" aria-busy="true">
           <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-muted-foreground motion-reduce:animate-none" aria-hidden />
-          <p className="text-sm font-mono text-muted-foreground">Rendering the operator's plaintext view…</p>
+          <p className="text-sm font-mono text-muted-foreground">Rendering the operator&rsquo;s plaintext view…</p>
         </div>
       </PageShell>
     );

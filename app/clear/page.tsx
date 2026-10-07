@@ -18,8 +18,7 @@ import { NettingCalculator } from "@/components/netting-calculator";
 import { WalletConnect } from "@/components/wallet-connect";
 import { EscrowVaultCard } from "@/components/escrow-vault-card";
 import { PositionBuilderModal } from "@/components/position-builder-modal";
-import { type BackendKind, type PositionBook, type PositionLeg, type PartyId, usd } from "@/lib/margin";
-import { getConfidentialBackend } from "@/lib/confidential";
+import { type BackendKind, type PositionBook, type PositionLeg, type PartyId } from "@/lib/margin";
 
 const STAGES_SOLANA = [
   "Sealing Party A legs",
@@ -200,7 +199,7 @@ export default function ClearPage() {
   const netted = useMemo(() => twoPartyNettedSafe(bookA, bookB), [bookA, bookB]);
 
   function loadAdversarialDemo() {
-    window.location.href = "/adversarial";
+    window.open("/adversarial", "_self");
   }
 
   function connectPartyA(address: string) {

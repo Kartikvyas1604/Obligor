@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { ApiError, parseBody, rateLimitFor, readJsonBody, withApi } from "@/lib/http";
+import { parseBody, rateLimitFor, readJsonBody, withApi } from "@/lib/http";
 import { chainSchema } from "@/lib/env";
 
 const bodySchema = z.object({

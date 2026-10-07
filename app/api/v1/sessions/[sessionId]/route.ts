@@ -12,7 +12,7 @@ import {
   settleDealSession,
 } from "@/lib/deal-session";
 import { priceAndNormalizeLegs } from "@/lib/positions";
-import { backendKindSchema, walletSchema } from "@/lib/contracts";
+import { walletSchema } from "@/lib/contracts";
 import type { PositionLeg } from "@/lib/margin";
 
 const BODY_LIMIT = 256 * 1024;
