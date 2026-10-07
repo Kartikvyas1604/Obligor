@@ -28,7 +28,7 @@ function makeBook(party: "A" | "B", notional: number): PositionBook {
         signedExposureUsd: shortSide ? -notional : notional,
         haircut: shortSide ? 0.15 : 0.1,
         markUsd: SOL_MARK,
-        source: "mock",
+        source: "manual",
       },
     ],
   };

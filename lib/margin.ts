@@ -1,8 +1,8 @@
 export type PartyId = "A" | "B";
 export type ChainId = "solana" | "monad";
 export type Side = "long" | "short" | "lend" | "borrow";
-export type Venue = "drift" | "kamino" | "mock_equity" | "monad_fixture";
-export type Source = "live" | "mock";
+export type Venue = "drift" | "kamino" | "mock_equity" | "monad_fixture" | "manual";
+export type Source = "manual" | "demo" | "live" | "fallback";
 export type BackendKind = "arcium" | "enclave" | "simulated";
 
 export interface PositionLeg {
