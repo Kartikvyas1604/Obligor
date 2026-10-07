@@ -11,7 +11,9 @@
     "verify:x402": "npx -y tsx scripts/verify-x402-networks.ts",
     "demo:agent-a": "npx -y tsx scripts/demo-agent-a.ts",
     "demo:agent-b": "npx -y tsx scripts/demo-agent-b.ts",
-    "demo:agent-monad": "npx -y tsx scripts/demo-agent-monad.ts"
+    "demo:agent-monad": "npx -y tsx scripts/demo-agent-monad.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "lucide-react": "^1.48.0",
