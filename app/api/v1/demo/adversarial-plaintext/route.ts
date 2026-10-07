@@ -1,39 +1,45 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { ApiError, parseBody, rateLimitFor, readJsonBody, withApi } from "@/lib/http";
+import { env } from "@/lib/env";
 import { adversarialBooks } from "@/lib/fixtures";
-import { twoPartyNetted, twoPartySiloed } from "@/lib/margin";
+import { twoPartyNetted, twoPartySiloed, type PositionBook } from "@/lib/margin";
 
-export async function POST(req: NextRequest) {
-  let body: { iUnderstandThisLeaksBothBooks?: boolean } = {};
-  try {
-    body = await req.json();
-  } catch {
-    // empty
-  }
+const bodySchema = z.object({
+  iUnderstandThisLeaksBothBooks: z.literal(true),
+});
 
-  if (!body.iUnderstandThisLeaksBothBooks) {
-    return NextResponse.json(
-      {
-        error: "CONFIRMATION_REQUIRED",
-        message:
-          "Adversarial counterfactual endpoint requires explicit acknowledgment: 'iUnderstandThisLeaksBothBooks: true'. This endpoint deliberately exposes both books to demonstrate why centralized clearing fails.",
-      },
-      { status: 400 },
+/**
+ * POST /api/v1/demo/adversarial-plaintext
+ * Demo-only counterfactual: deliberately returns BOTH books in plaintext to
+ * demonstrate why single-operator clearing is toxic. Requires explicit
+ * acknowledgment, is rate-limited, and is gated behind DEMO_ALLOW_FIXTURES.
+ * Never used by the confidential path.
+ */
+export const POST = withApi(async ({ req }) => {
+  rateLimitFor("demo", req);
+  if (!env.demo.allowFixtures) {
+    throw ApiError.unavailable(
+      "The adversarial plaintext demo is disabled in this environment (DEMO_ALLOW_FIXTURES=false). The confidential path never exposes either book.",
     );
   }
+
+  parseBody(bodySchema, await readJsonBody(req));
 
   const siloed = twoPartySiloed(adversarialBooks.a, adversarialBooks.b);
   const netted = twoPartyNetted(adversarialBooks.a, adversarialBooks.b);
 
   return NextResponse.json({
+    ok: true,
     danger: "DANGEROUS / plaintext operator view",
     demonstrationPurpose:
-      "Shows why single-operator centralized clearing creates a fatal privacy liability: operator sees both books and can front-run strategies.",
+      "Shows why single-operator centralized clearing creates a fatal privacy liability: the operator sees both books and can front-run either desk.",
     partyA: adversarialBooks.a,
     partyB: adversarialBooks.b,
     siloed,
     netted,
     operatorThreatVector:
-      "Operator learns Desk A is long $120k SOL and Desk B is short $120k SOL. Operator can liquidate, front-run or copy-trade before releasing margin.",
+      "The operator learns Desk A's full book and Desk B's full book in plaintext. They can liquidate, front-run, or copy-trade before releasing margin.",
     timestamp: new Date().toISOString(),
   });
-}
+});
