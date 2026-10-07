@@ -356,6 +356,69 @@ Obligor is **pure clearing compute and margin risk analytics**.
 
 ---
 
+## Deploy & Operations (production runbook)
+
+Obligor's backend is **Next.js App Router Route Handlers in TypeScript** (no separate
+Express sidecar). Everything configurable lives in the environment with zod-validated,
+typed access in `lib/env.ts` — see [`.env.example`](.env.example) for the full matrix.
+
+### Environment tiers
+
+| Tier | Session store | Demo fixtures | Unpaid clearing | Payments |
+| --- | --- | --- | --- | --- |
+| Local dev | `SESSION_STORE_MODE=memory` | `DEMO_ALLOW_FIXTURES=true` | `DEMO_ALLOW_UNPAID=true` | optional |
+| Staging | `file` (or managed DB) | off | off | devnet/testnet USDC |
+| Production | `file` built-in; swap the store impl for Redis/Postgres (interface in `lib/session-store.ts`) | **off (hard default)** | **off (hard default)** | real payTo wallets via `SOLANA_PAY_TO` / `MONAD_PAY_TO` |
+
+Enabling demo gates in production boots with a config warning every request path abides
+by them — the 402/x402 challenge is built from `X402_*` env terms and returns an honest
+`503 PAYMENTS_NOT_CONFIGURED` for any chain with no destination wallet configured.
+
+### Deploy
+
+1. `npm ci && npm run build` (CI runs lint, typecheck, `npm test`, and the build on every push).
+2. Single instance (Vercel/Fly/VM): set env vars, ensure `DATA_DIR` is on a persistent
+   volume when `SESSION_STORE_MODE=file`.
+3. Multi-instance: implement the `SessionStore` interface against Redis/Postgres; the
+   in-memory rate limiter is per-instance in the meantime, so put a shared-edge limiter
+   (or gateway) in front until then.
+4. Rollback: deploy the previous build tag; sessions written in the newer schema are
+   rejected on load and quarantined (`sessions.json.corrupt-*`) rather than crashing.
+
+### Operational guarantees in this build
+
+- Health: `GET /api/v1/health` — config surface (demo gates, payment enablement per
+  chain, store mode, session count, haircuts, oracle policy) for uptime checks.
+- Logs: structured JSON (`ts, level, component, message, request_id, meta`), secrets
+  redacted by key pattern (`lib/logger.ts`), request IDs surfaced in every error
+  envelope + `X-Request-Id` response header.
+- Rate limits: per-IP token buckets (`RATE_LIMIT_*`), separate tighter policies on
+  compute and demo surfaces; hard 256KB request-body cap on all POST routes.
+- Validation: every input surface is zod-validated (`lib/contracts.ts` shared schemas);
+  desk-supplied marks are re-priced via live Pyth Hermes with deviation warnings, and
+  fallback/stale marks are labeled `fallback`/`stale` by provenance — never silently
+  presented as live.
+- Honesty invariants preserved: no fabricated positions, no default payloads, no
+  invented transaction hashes or attestation quotes; demo endpoints gated and
+  rate-limited; adverse releases computed but never executed on-chain from the API.
+
+### Known production limits (honest ceilings, not overclaims)
+
+- **MPC / TEE binaries are not wired into the hosted runtime.** `ArciumBackend` and
+  `EnclaveBackend` execute the exact same formula in sealed-execution simulation;
+  the Arcis enclave + Nitro program live in `programs/` and `enclave/` in the repo.
+  Trust-model labels stay honest on every screen.
+- **Per-protocol on-chain position decoding** (Kamino/Drift obligation parsing) is
+  adapter-ready but not included; books enter via desk input, the deal-room flow, or
+  the API, and get priced by live oracle marks.
+- **x402 signature verification is format-check only** until the `@x402` SDK wiring;
+  payment enforcement (402 → paid) is real, cryptographic settlement verification is
+  a follow-up.
+- The file session store is single-instance; horizontal scale needs the Redis/Postgres
+  implementation noted above.
+
+---
+
 ## Contributing & License
 - Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for architectural invariants and code conventions.
 - Licensed under [MIT](LICENSE) — © 2026 Kartik Vyas. Use it, fork it, ship it.
