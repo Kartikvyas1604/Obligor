@@ -1,5 +1,13 @@
+/**
+ * Deal-room orchestration (pure domain logic, no HTTP).
+ * Persistence goes through the SessionStore; validation of inputs happens at
+ * the route boundary. Every mutation stamps updatedAt for TTL eviction.
+ */
+
 import { type PositionBook, type PositionLeg, type NetMarginResult, twoPartySiloed, type BackendKind } from "@/lib/margin";
 import { getConfidentialBackend } from "@/lib/confidential";
+import { sessionStore } from "@/lib/session-store";
+import { env } from "@/lib/env";
 
 export type SessionStatus =
   | "waiting_for_party_b"
@@ -35,29 +43,24 @@ export interface DealSession {
   attestationQuote: string | null;
 }
 
-// Global in-memory session registry with automated TTL cleanup
-const sessions = new Map<string, DealSession>();
+import { randomBytes } from "node:crypto";
 
 export function generateSessionId(): string {
-  const randomBytes = Array.from({ length: 16 }, () =>
-    Math.floor(Math.random() * 256)
-      .toString(16)
-      .padStart(2, "0")
-  ).join("");
-  return `0x${randomBytes}`;
+  return `0x${randomBytes(16).toString("hex")}`;
 }
 
 export function createDealSession(
   walletA: string,
-  labelA: string = "Desk A",
+  labelA = "Desk A",
   legsA: PositionLeg[] = [],
-  backend: BackendKind = "arcium"
+  backend: BackendKind = "arcium",
 ): DealSession {
   const sessionId = generateSessionId();
+  const now = Date.now();
   const session: DealSession = {
     sessionId,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
+    createdAt: now,
+    updatedAt: now,
     status: "waiting_for_party_b",
     backend,
     partyA: {
@@ -75,24 +78,31 @@ export function createDealSession(
     escrowTxHash: null,
     attestationQuote: null,
   };
-  sessions.set(sessionId, session);
+  sessionStore.set(session);
   return session;
 }
 
-export function getDealSession(sessionId: string): DealSession | null {
-  const session = sessions.get(sessionId);
-  if (!session) return null;
-  return session;
+export function getSession(sessionId: string): DealSession | null {
+  return sessionStore.get(sessionId);
+}
+
+export function deleteSession(sessionId: string): void {
+  sessionStore.delete(sessionId);
+}
+
+export function saveSession(session: DealSession): void {
+  session.updatedAt = Date.now();
+  sessionStore.set(session);
 }
 
 export function joinDealSession(
   sessionId: string,
   walletB: string,
-  labelB: string = "Desk B",
-  legsB: PositionLeg[] = []
+  labelB = "Desk B",
+  legsB: PositionLeg[] = [],
 ): DealSession | null {
-  const session = sessions.get(sessionId);
-  if (!session) return null;
+  const session = sessionStore.get(sessionId);
+  if (!session || session.partyB) return null;
 
   session.partyB = {
     partyId: "B",
@@ -104,33 +114,34 @@ export function joinDealSession(
     depositedAmountUsd: 0,
   };
   session.status = "both_connected";
-  session.updatedAt = Date.now();
+  saveSession(session);
   return session;
 }
 
 export function updatePartyLegs(
   sessionId: string,
   partyId: "A" | "B",
-  legs: PositionLeg[]
+  legs: PositionLeg[],
 ): DealSession | null {
-  const session = sessions.get(sessionId);
+  const session = sessionStore.get(sessionId);
   if (!session) return null;
-
   if (partyId === "A") {
     session.partyA.legs = legs;
   } else if (session.partyB) {
     session.partyB.legs = legs;
+  } else {
+    return null;
   }
-  session.updatedAt = Date.now();
+  saveSession(session);
   return session;
 }
 
 export function sealPartyBook(
   sessionId: string,
   partyId: "A" | "B",
-  signature?: string
+  signature?: string,
 ): DealSession | null {
-  const session = sessions.get(sessionId);
+  const session = sessionStore.get(sessionId);
   if (!session) return null;
 
   if (partyId === "A") {
@@ -139,21 +150,24 @@ export function sealPartyBook(
   } else if (session.partyB) {
     session.partyB.isSealed = true;
     session.partyB.signature = signature;
+  } else {
+    return null;
   }
 
   if (session.partyA.isSealed && session.partyB?.isSealed) {
     session.status = "sealed";
   }
-  session.updatedAt = Date.now();
+  saveSession(session);
   return session;
 }
 
 export async function clearDealSession(sessionId: string): Promise<DealSession | null> {
-  const session = sessions.get(sessionId);
+  const session = sessionStore.get(sessionId);
   if (!session || !session.partyB) return null;
+  if (session.status !== "sealed") return null; // both books must be sealed
 
   session.status = "clearing";
-  session.updatedAt = Date.now();
+  saveSession(session);
 
   const bookA: PositionBook = {
     party: "A",
@@ -173,26 +187,33 @@ export async function clearDealSession(sessionId: string): Promise<DealSession |
     warnings: [],
   };
 
-  const siloed = twoPartySiloed(bookA, bookB);
-  const backendInstance = getConfidentialBackend(session.backend);
-  const res = await backendInstance.netTwoParty(bookA, bookB);
+  try {
+    const siloed = twoPartySiloed(bookA, bookB);
+    const backendInstance = getConfidentialBackend(session.backend);
+    const res = await backendInstance.netTwoParty(bookA, bookB);
 
-  session.result = res;
-  session.siloedCombinedUsd = siloed.siloedCombined;
-  session.attestationQuote = res.attestation?.quote || null;
-  session.status = "cleared";
-  session.updatedAt = Date.now();
-
-  return session;
+    session.result = res;
+    session.siloedCombinedUsd = siloed.siloedCombined;
+    session.attestationQuote = res.attestation?.quote || null;
+    session.status = "cleared";
+    saveSession(session);
+    return session;
+  } catch (err) {
+    // Fail closed: a failed confidential computation never silently falls
+    // back to plaintext, and the session stays fit for retry.
+    session.status = "sealed";
+    saveSession(session);
+    throw err;
+  }
 }
 
 export function updateEscrowState(
   sessionId: string,
   partyId: "A" | "B",
   depositedAmountUsd: number,
-  txHash?: string
+  txHash?: string,
 ): DealSession | null {
-  const session = sessions.get(sessionId);
+  const session = sessionStore.get(sessionId);
   if (!session || !session.partyB) return null;
 
   if (partyId === "A") {
@@ -206,15 +227,17 @@ export function updateEscrowState(
     if (txHash) session.escrowTxHash = txHash;
   }
 
-  session.updatedAt = Date.now();
+  saveSession(session);
   return session;
 }
 
 export function settleDealSession(sessionId: string): DealSession | null {
-  const session = sessions.get(sessionId);
-  if (!session) return null;
+  const session = sessionStore.get(sessionId);
+  if (!session || session.status !== "escrow_locked") return null;
 
   session.status = "settled";
-  session.updatedAt = Date.now();
+  saveSession(session);
   return session;
 }
+
+export const SESSION_TTL_MS = () => env.store.ttlMs;

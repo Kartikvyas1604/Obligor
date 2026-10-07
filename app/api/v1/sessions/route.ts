@@ -1,18 +1,38 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { parseBody, rateLimitFor, readJsonBody, withApi } from "@/lib/http";
 import { createDealSession } from "@/lib/deal-session";
+import { priceAndNormalizeLegs } from "@/lib/positions";
+import { backendKindSchema, walletSchema } from "@/lib/contracts";
 
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json().catch(() => ({}));
-    const walletA = body.walletA || "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
-    const labelA = body.labelA || "Desk A (Initiator)";
-    const legsA = body.legsA || [];
-    const backend = body.backend || "arcium";
+const createSchema = z.object({
+  walletA: walletSchema,
+  labelA: z.string().trim().max(40).default("Desk A (Initiator)"),
+  legsA: z.array(z.record(z.unknown())).max(32).optional(),
+  backend: backendKindSchema.optional(),
+});
 
-    const session = createDealSession(walletA, labelA, legsA, backend);
-    return NextResponse.json({ success: true, session }, { status: 201 });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to create deal session";
-    return NextResponse.json({ error: message }, { status: 500 });
+/** Create a deal room. Legs are optional at creation and can be added after. */
+export const POST = withApi(async ({ req }) => {
+  rateLimitFor("default", req);
+  const body = parseBody(createSchema, await readJsonBody(req));
+
+  let legs;
+  let warnings: string[] = [];
+  if (body.legsA && body.legsA.length > 0) {
+    const priced = await priceAndNormalizeLegs("A", body.legsA, { source: "manual" });
+    legs = priced.legs;
+    warnings = priced.warnings;
   }
-}
+
+  const session = createDealSession(body.walletA, body.labelA, legs ?? [], body.backend ?? "arcium");
+
+  return NextResponse.json(
+    {
+      ok: true,
+      session,
+      warnings,
+    },
+    { status: 201 },
+  );
+});

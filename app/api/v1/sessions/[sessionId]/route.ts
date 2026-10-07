@@ -1,6 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { ApiError, parseBody, rateLimitFor, readJsonBody, withApi } from "@/lib/http";
 import {
-  getDealSession,
+  deleteSession,
+  getSession,
   joinDealSession,
   updatePartyLegs,
   sealPartyBook,
@@ -8,76 +11,134 @@ import {
   updateEscrowState,
   settleDealSession,
 } from "@/lib/deal-session";
+import { priceAndNormalizeLegs } from "@/lib/positions";
+import { backendKindSchema, walletSchema } from "@/lib/contracts";
+import type { PositionLeg } from "@/lib/margin";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ sessionId: string }> }
-) {
-  const { sessionId } = await params;
-  const session = getDealSession(sessionId);
+const BODY_LIMIT = 256 * 1024;
 
-  if (!session) {
-    return NextResponse.json({ error: "Session not found or expired" }, { status: 404 });
-  }
+const postSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("join"),
+    walletB: walletSchema,
+    labelB: z.string().trim().max(40).default("Desk B (Counterparty)"),
+    legsB: z.array(z.record(z.unknown())).max(32).optional(),
+  }),
+  z.object({
+    action: z.literal("update_legs"),
+    partyId: z.enum(["A", "B"]),
+    legs: z.array(z.record(z.unknown())).max(32),
+  }),
+  z.object({
+    action: z.literal("seal"),
+    partyId: z.enum(["A", "B"]),
+    signature: z.string().min(8).max(512).optional(),
+  }),
+  z.object({ action: z.literal("clear") }),
+  z.object({
+    action: z.literal("deposit_escrow"),
+    partyId: z.enum(["A", "B"]),
+    amount: z.number().positive().max(100_000_000),
+    txHash: z.string().min(8).max(128).optional(),
+  }),
+  z.object({ action: z.literal("settle") }),
+]);
 
-  return NextResponse.json({ success: true, session });
+function notModified(session: unknown) {
+  return NextResponse.json({ ok: true, session }, { status: 200 });
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ sessionId: string }> }
-) {
-  const { sessionId } = await params;
-  const body = await req.json().catch(() => ({}));
-  const action = body.action;
-
-  const session = getDealSession(sessionId);
+export const GET = withApi<{ sessionId: string }>(async ({ params }) => {
+  const { sessionId } = params;
+  const session = getSession(sessionId);
   if (!session) {
-    return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    throw ApiError.notFound("This deal room does not exist or has expired");
+  }
+  return NextResponse.json({ ok: true, session });
+});
+
+export const POST = withApi<{ sessionId: string }>(async ({ req, params }) => {
+  rateLimitFor("default", req);
+  const { sessionId } = params;
+
+  const contentLength = Number(req.headers.get("content-length") || "0");
+  if (contentLength > BODY_LIMIT) {
+    throw ApiError.payloadTooLarge(0.25);
   }
 
-  switch (action) {
+  const session = getSession(sessionId);
+  if (!session) {
+    throw ApiError.notFound("This deal room does not exist or has expired");
+  }
+
+  const body = parseBody(postSchema, await readJsonBody(req));
+
+  switch (body.action) {
     case "join": {
-      const walletB = body.walletB || "6d8n6u6fR8P3zJ9eHwK7V4mQ2xY1tL5sA9bC3dE7fG1h";
-      const labelB = body.labelB || "Desk B (Counterparty)";
-      const legsB = body.legsB || [];
-      const updated = joinDealSession(sessionId, walletB, labelB, legsB);
-      return NextResponse.json({ success: true, session: updated });
+      if (session.partyB) {
+        throw ApiError.badRequest("Desk B already joined this room");
+      }
+      let legs: PositionLeg[] = [];
+      if (body.legsB && body.legsB.length > 0) {
+        const priced = await priceAndNormalizeLegs("B", body.legsB, { source: "manual" });
+        legs = priced.legs;
+      }
+      const updated = joinDealSession(sessionId, body.walletB, body.labelB, legs);
+      return notModified(updated);
     }
 
     case "update_legs": {
-      const partyId = body.partyId as "A" | "B";
-      const legs = body.legs || [];
-      const updated = updatePartyLegs(sessionId, partyId, legs);
-      return NextResponse.json({ success: true, session: updated });
+      const priced = await priceAndNormalizeLegs(body.partyId, body.legs, { source: "manual" });
+      const updated = updatePartyLegs(sessionId, body.partyId, priced.legs);
+      if (!updated) throw ApiError.badRequest("Cannot update legs for a party that has not joined yet");
+      return NextResponse.json({ ok: true, session: updated, warnings: priced.warnings });
     }
 
     case "seal": {
-      const partyId = body.partyId as "A" | "B";
-      const signature = body.signature;
-      const updated = sealPartyBook(sessionId, partyId, signature);
-      return NextResponse.json({ success: true, session: updated });
+      const updated = sealPartyBook(sessionId, body.partyId, body.signature);
+      if (!updated) throw ApiError.badRequest("Cannot seal: party has not joined");
+      return notModified(updated);
     }
 
     case "clear": {
-      const updated = await clearDealSession(sessionId);
-      return NextResponse.json({ success: true, session: updated });
+      try {
+        const updated = await clearDealSession(sessionId);
+        if (!updated) {
+          throw ApiError.badRequest(
+            "Clearing requires both desks joined and both books sealed first",
+          );
+        }
+        return notModified(updated);
+      } catch (err) {
+        if (err instanceof ApiError) throw err;
+        throw ApiError.unavailable(
+          `Confidential engine failed — session kept sealed for retry: ${err instanceof Error ? err.message : "unknown error"}`,
+        );
+      }
     }
 
     case "deposit_escrow": {
-      const partyId = body.partyId as "A" | "B";
-      const amount = body.amount || 0;
-      const txHash = body.txHash;
-      const updated = updateEscrowState(sessionId, partyId, amount, txHash);
-      return NextResponse.json({ success: true, session: updated });
+      const updated = updateEscrowState(sessionId, body.partyId, body.amount, body.txHash);
+      if (!updated) throw ApiError.badRequest("Escrow requires both desks joined");
+      return notModified(updated);
     }
 
     case "settle": {
       const updated = settleDealSession(sessionId);
-      return NextResponse.json({ success: true, session: updated });
+      if (!updated) {
+        throw ApiError.badRequest("Settlement requires escrow to be locked first");
+      }
+      return notModified(updated);
     }
-
-    default:
-      return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   }
-}
+});
+
+export const DELETE = withApi<{ sessionId: string }>(async ({ params }) => {
+  const { sessionId } = params;
+  const session = getSession(sessionId);
+  if (!session) {
+    throw ApiError.notFound("This deal room does not exist or has expired");
+  }
+  deleteSession(sessionId);
+  return NextResponse.json({ ok: true, deleted: sessionId });
+});
