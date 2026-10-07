@@ -33,9 +33,24 @@ const STAGES_MONAD = [
   "Sealing Party A legs into the enclave",
   "Sealing Party B legs into the enclave",
   "Executing the netting formula inside the TEE",
-  "Generating hardware attestation",
-  "Publishing the verified aggregate result",
+  "Checking enclave attestation (claimed only if the enclave issues one)",
+  "Publishing the aggregate result",
 ];
+
+// The stage list describes the REAL confidential pipeline. Until the real
+// MXE/enclave transports are wired, JS backends run the local simulation —
+// so every run gets the honest transcript banner plus the real steps.
+const SIMULATION_PREAMBLE = "Sealed-execution simulation — the exact formula runs in plaintext (no real sealing)";
+const SIM_PREAMBLE_SHORT = "Simulated seal — pipeline steps below describe the production transport";
+
+function stagesFor(backend: BackendKind) {
+  if (backend === "simulated") {
+    return [SIMULATION_PREAMBLE, "The exact netting formula runs locally in your browser"];
+  }
+  return backend === "enclave"
+    ? [SIM_PREAMBLE_SHORT, ...STAGES_MONAD]
+    : [SIM_PREAMBLE_SHORT, ...STAGES_SOLANA];
+}
 
 function makeEmptyBook(party: PartyId): PositionBook {
   return {
@@ -228,7 +243,7 @@ export default function ClearPage() {
     setPhase("computing");
     setStage(0);
 
-    const stages = backend === "enclave" ? STAGES_MONAD : STAGES_SOLANA;
+    const stages = stagesFor(backend);
     const stepDuration = 600;
 
     stages.forEach((_, i) => {
@@ -291,7 +306,6 @@ export default function ClearPage() {
   }
 
   const busy = phase === "computing";
-  const stages = backend === "enclave" ? STAGES_MONAD : STAGES_SOLANA;
 
   return (
     <PageShell>
