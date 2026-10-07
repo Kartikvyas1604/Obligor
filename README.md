@@ -168,13 +168,14 @@ Obligor explicitly labels what is real code, what is fixture, and what is out of
 
 | Component | Status | Description |
 | :--- | :--- | :--- |
-| **Two-Party Netting Formula** | **Real** | Pure TypeScript source of truth (`lib/margin.ts`), replicated in Arcis circuit and Rust enclave |
-| **Position Books (Solana Demo)** | **Partial** | Party A Kamino SOL lend marked live read-only; other legs labeled fixture |
-| **Mock Equity `tAAPL`** | **Mock** | Config-driven fixture price; adapter-ready for xStocks/Backed (Solana RO); never custody |
-| **Arcium MPC Circuit** | **Real Code** | Full Arcis circuit in `programs/obligor-mxe/encrypted-ixs/` & Anchor program in `src/lib.rs` |
-| **Monad TEE Enclave** | **Real Code** | Full Rust enclave code in `enclave/obligor-enclave/` with SHA256 PCR0 quote generator |
-| **Parallel Multi-Pair Clearing** | **Real** | Concurrent multi-pair netting endpoint (`/api/v1/net-margin/parallel`) |
-| **x402 V2 Machine Payments** | **Real** | Standards-compliant x402 HTTP challenge, payment verification, and automated client scripts |
+| **Two-Party Netting Formula** | **Real** | Pure TypeScript source of truth (`lib/margin.ts`) with golden tests; mirrored in the Arcis circuit and the Rust enclave |
+| **Position ingestion** | **Real (oracle-priced)** | Books enter via desk input, deal rooms, or the API; every mark re-priced against live Pyth Hermes with deviation/stale/fallback provenance labels. Fabricated per-party quantities were removed — positions are never invented. |
+| **Confidential execution (MPC / TEE)** | **Sealed-execution simulation** | The Arcis circuit (`programs/obligor-mxe/encrypted-ixs/`) and Rust enclave (`enclave/obligor-enclave/`) are real code and CI-compiled, but this deployment executes the identical formula locally. trustModel stays `simulated_plaintext_compute` — real MPC/TEE claimed only when `CONFIDENTIAL_REAL_TRANSPORTS=true` and the MXE/enclave transport is wired (then it **fails closed**, never silently simulates). |
+| **Hardware attestation** | **Not claimed** | The enclave returns `provider:"none", verified:false` plus a SHA256 proof-of-execution digest. A genuine Nitro/Oyster NSM attestation document is the only thing that ever flips `verified`. |
+| **Mock Equity `tAAPL`** | **Mock** | Priced from the live Pyth AAPL mark; adapter-ready for xStocks/Backed rails; never custody |
+| **Parallel Multi-Pair Clearing** | **Real** | `/api/v1/net-margin/parallel` nets ≥3 desk pairs concurrently per epoch (server-enforced minimum); trust model labeled from execution |
+| **x402 V2 Machine Payments** | **Partial — honest** | 402 challenge built from env terms is real, and the Monad facilitator (`x402-facilitator.molandak.org/supported`) is live-verified by `npm run verify:x402`. Payment *settlement verification* is format-check until the `@x402` SDK wiring lands; `SOLANA_PAY_TO`/`MONAD_PAY_TO` gates enablement per chain. |
+| **Bilateral escrow** | **Partial** | Deposit + release envelopes are real validated APIs (`/v1/escrow/*`) wired to the UI; on-chain lock/transfer executes in the escrow contract repo — the API never fabricates a transaction hash or claims funds moved. |
 | **Capital Movement / Liquidation** | **Not Built** | Margin analytics only; Obligor does not custody or withdraw venue funds |
 
 ---
@@ -369,6 +370,8 @@ typed access in `lib/env.ts` — see [`.env.example`](.env.example) for the full
 | Local dev | `SESSION_STORE_MODE=memory` | `DEMO_ALLOW_FIXTURES=true` | `DEMO_ALLOW_UNPAID=true` | optional |
 | Staging | `file` (or managed DB) | off | off | devnet/testnet USDC |
 | Production | `file` built-in; swap the store impl for Redis/Postgres (interface in `lib/session-store.ts`) | **off (hard default)** | **off (hard default)** | real payTo wallets via `SOLANA_PAY_TO` / `MONAD_PAY_TO` |
+
+**Confidential execution gate:** `CONFIDENTIAL_REAL_TRANSPORTS=true` requires `ARCIUM_MXE_ENDPOINT` / `ENCLAVE_ENDPOINT` and makes uncon-nected transports **fail closed** (`CONFIDENTIAL_UNAVAILABLE`) instead of silently simulating. Leave it `false` only where labeled simulation is the intent (demos, CI); the run's trust model is always whatever actually executed.
 
 Enabling demo gates in production boots with a config warning every request path abides
 by them — the 402/x402 challenge is built from `X402_*` env terms and returns an honest
