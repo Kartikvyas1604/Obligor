@@ -7,7 +7,6 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:margin": "node scripts/test-runner.js",
     "verify:x402": "npx -y tsx scripts/verify-x402-networks.ts",
     "demo:agent-a": "npx -y tsx scripts/demo-agent-a.ts",
     "demo:agent-b": "npx -y tsx scripts/demo-agent-b.ts",

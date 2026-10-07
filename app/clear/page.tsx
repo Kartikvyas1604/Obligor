@@ -570,6 +570,9 @@ export default function ClearPage() {
               netMargin={netted.nettedCombinedUsd}
               savingsUsd={netted.savingsUsd}
               backend={backend}
+              computationId={apiComputationId}
+              walletA={bookA.wallet}
+              walletB={bookB.wallet}
             />
 
             {(apiComputationId || apiAttestation) && (

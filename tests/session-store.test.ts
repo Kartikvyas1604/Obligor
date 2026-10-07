@@ -15,6 +15,7 @@ const TTL_MS = 500;
 function makeSession(id: string, updatedAt = Date.now()): DealSession {
   return {
     sessionId: id,
+    chain: "solana",
     createdAt: updatedAt - 1000,
     updatedAt,
     status: "waiting_for_party_b",

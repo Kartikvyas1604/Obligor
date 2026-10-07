@@ -4,7 +4,8 @@
  * the route boundary. Every mutation stamps updatedAt for TTL eviction.
  */
 
-import { type PositionBook, type PositionLeg, type NetMarginResult, twoPartySiloed, type BackendKind } from "@/lib/margin";
+import { type PositionBook, type PositionLeg, twoPartySiloed, type BackendKind } from "@/lib/margin";
+import { type ConfidentialNetMarginResult } from "@/lib/confidential";
 import { getConfidentialBackend } from "@/lib/confidential";
 import { sessionStore } from "@/lib/session-store";
 import { env } from "@/lib/env";
@@ -31,13 +32,15 @@ export interface SessionParty {
 
 export interface DealSession {
   sessionId: string;
+  chain: "solana" | "monad";
   createdAt: number;
   updatedAt: number;
   status: SessionStatus;
   backend: BackendKind;
   partyA: SessionParty;
   partyB: SessionParty | null;
-  result: NetMarginResult | null;
+  /** Full confidential result (computationId/trustModel/attestation included). */
+  result: ConfidentialNetMarginResult | null;
   siloedCombinedUsd: number | null;
   escrowTxHash: string | null;
   attestationQuote: string | null;
@@ -54,11 +57,13 @@ export function createDealSession(
   labelA = "Desk A",
   legsA: PositionLeg[] = [],
   backend: BackendKind = "arcium",
+  chain: "solana" | "monad" = backend === "enclave" ? "monad" : "solana",
 ): DealSession {
   const sessionId = generateSessionId();
   const now = Date.now();
   const session: DealSession = {
     sessionId,
+    chain,
     createdAt: now,
     updatedAt: now,
     status: "waiting_for_party_b",
@@ -173,7 +178,7 @@ export async function clearDealSession(sessionId: string): Promise<DealSession |
     party: "A",
     label: session.partyA.label,
     wallet: session.partyA.wallet,
-    chain: "solana",
+    chain: session.chain,
     legs: session.partyA.legs,
     warnings: [],
   };
@@ -182,7 +187,7 @@ export async function clearDealSession(sessionId: string): Promise<DealSession |
     party: "B",
     label: session.partyB.label,
     wallet: session.partyB.wallet,
-    chain: "solana",
+    chain: session.chain,
     legs: session.partyB.legs,
     warnings: [],
   };

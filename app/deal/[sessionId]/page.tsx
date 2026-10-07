@@ -479,6 +479,10 @@ export default function LiveDealPage({
               netMargin={session.result.nettedCombinedUsd}
               savingsUsd={session.result.savingsUsd}
               backend={session.backend}
+              computationId={session.result.computationId}
+              walletA={session.partyA.wallet}
+              walletB={session.partyB?.wallet ?? null}
+              sessionId={session.sessionId}
             />
           </div>
         )}
