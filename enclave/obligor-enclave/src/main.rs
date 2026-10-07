@@ -106,7 +106,11 @@ pub fn compute_two_party_netted(
 
     let savings = (siloed_combined - netted_combined).max(0.0);
 
-    // Compute PCR0 and SHA256 measurement of the sealed execution
+    // SHA256 digest of the computation inputs/outputs — proof-of-execution
+    // binding, NOT a hardware attestation. A real Nitro/Oyster NSM call
+    // (aws_nitro_enclaves_nsm_core::nsm_get_random / describe…) replaces this
+    // once the enclave binary boots inside a real enclave VM, and `verified`
+    // flips on the HOST verifier — never hardcoded here.
     let mut hasher = Sha256::new();
     hasher.update(session_id.as_bytes());
     hasher.update(siloed_combined.to_le_bytes());
@@ -124,10 +128,13 @@ pub fn compute_two_party_netted(
         net_exposure_usd: (total_net_exposure * 100.0).round() / 100.0,
         buckets: bucket_results,
         attestation: AttestationQuote {
-            provider: "nitro_enclave".to_string(),
-            verified: true,
-            quote_hex: format!("0xnitro_attest_{}", measurement),
-            pcr0: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string(),
+            // Honest default: this build cannot issue a hardware attestation
+            // outside a real enclave VM. The host verifies quotes and flips
+            // `verified` only from a genuine NSM/Nitro attestation document.
+            provider: "none".to_string(),
+            verified: false,
+            quote_hex: String::new(),
+            pcr0: String::new(),
             measurement,
         },
     }

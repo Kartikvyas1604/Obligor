@@ -17,7 +17,7 @@ const EPOCH_STAGES = [
   "Sealing desk pairs into enclave envelopes",
   "Scheduling the concurrent batch",
   "Netting 3+ desk pairs simultaneously",
-  "Generating signed attestation",
+  "Checking enclave attestation metadata (claimed only when present)",
 ];
 
 interface DemoPair {

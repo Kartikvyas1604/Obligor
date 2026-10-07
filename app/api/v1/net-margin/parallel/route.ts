@@ -96,7 +96,9 @@ export const POST = withApi(async ({ req }) => {
     chain,
     concurrency: pairs.length,
     backend: "enclave",
-    trustModel: "hardware_attested_tee",
+    // Trust model is what the enclave backend ACTUALLY executed for this
+    // epoch — simulated seal until the attested transport is wired.
+    trustModel: pairs[0]?.margin.trustModel ?? "simulated_plaintext_compute",
     executionDurationMs,
     pairs,
     attestation: attestation
