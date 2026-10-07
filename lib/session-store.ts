@@ -65,14 +65,16 @@ class MemoryStore implements SessionStore {
 // ---------------------------------------
 // File store (atomic writes, TTL eviction)
 // ---------------------------------------
-class FileStore implements SessionStore {
+export class FileStore implements SessionStore {
   readonly mode = "file" as const;
   private map = new Map<string, DealSession>();
   private readonly filePath: string;
   private loaded = false;
+  private readonly ttlMs: number | undefined;
 
-  constructor() {
-    const dir = resolve(process.cwd(), env.runtime.dataDir);
+  constructor(dirOverride?: string, ttlMsOverride?: number) {
+    this.ttlMs = ttlMsOverride;
+    const dir = resolve(process.cwd(), dirOverride ?? env.runtime.dataDir);
     try {
       mkdirSync(dir, { recursive: true });
     } catch (err) {
@@ -80,8 +82,7 @@ class FileStore implements SessionStore {
         dataDir: dir,
         error: err instanceof Error ? err.message : String(err),
       });
-      // Re-lazy-load through the shared selector by throwing is not possible
-      // here; instead degrade to in-memory behavior with mode still "file".
+      // Degrade to in-memory behavior with mode still "file".
       this.filePath = "";
       return;
     }
@@ -94,7 +95,7 @@ class FileStore implements SessionStore {
     if (!existsSync(this.filePath)) return;
     try {
       const raw = JSON.parse(readFileSync(this.filePath, "utf8")) as Record<string, DealSession>;
-      const cutoff = Date.now() - env.store.ttlMs;
+      const cutoff = Date.now() - (this.ttlMs ?? env.store.ttlMs);
       for (const [id, s] of Object.entries(raw)) {
         if (s && typeof s === "object" && typeof s.updatedAt === "number" && s.updatedAt >= cutoff) {
           this.map.set(id, s);
@@ -129,7 +130,7 @@ class FileStore implements SessionStore {
   }
 
   private evictExpired(persist: boolean) {
-    const cutoff = Date.now() - env.store.ttlMs;
+    const cutoff = Date.now() - (this.ttlMs ?? env.store.ttlMs);
     let evicted = 0;
     for (const [id, s] of this.map) {
       if (s.updatedAt < cutoff) {
