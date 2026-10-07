@@ -8,7 +8,6 @@ import { HowItWorksVisual } from "@/components/how-it-works-visual";
 import { StatsBand, FaqSection, CtaBand } from "@/components/landing-sections";
 import { RevealSection } from "@/components/reveal-section";
 import { Marquee } from "@/components/marquee";
-import { Sparkle } from "@/components/sparkle";
 import { SealVisual, NetVisual, EscrowVisual } from "@/components/three-ways-visuals";
 
 const THREE_WAYS = [
@@ -74,7 +73,6 @@ export default function Home() {
           <div className="relative mx-auto grid max-w-[1332px] items-center gap-12 px-4 pb-20 pt-14 sm:px-6 md:pt-20 lg:grid-cols-2 lg:gap-16 lg:px-8">
             <div className="text-left">
               <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-[13px] font-medium tracking-[-0.01em] text-muted-foreground">
-                <Sparkle size={12} className="text-gold" />
                 Confidential two-party clearing
               </div>
 
@@ -148,7 +146,6 @@ export default function Home() {
             <RevealSection>
               <div className="max-w-xl text-left">
                 <span className="flex items-center gap-1.5 text-[13px] font-medium tracking-[-0.01em] text-muted-foreground">
-                  <Sparkle size={11} className="text-gold" />
                   What Obligor does
                 </span>
                 <h2
@@ -202,7 +199,6 @@ export default function Home() {
             <RevealSection>
               <div className="max-w-xl text-left">
                 <span className="flex items-center gap-1.5 text-[13px] font-medium tracking-[-0.01em] text-muted-foreground">
-                  <Sparkle size={11} className="text-gold" />
                   Why Obligor
                 </span>
                 <h2

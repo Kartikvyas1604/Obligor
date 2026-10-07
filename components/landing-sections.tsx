@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useCountUp } from "@/hooks/use-count-up";
-import { Sparkle } from "@/components/sparkle";
+import { useReplayInView } from "@/hooks/use-replay-in-view";
 
 const usd = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 });
@@ -14,13 +14,15 @@ function Stat({ value, decimals = 0, prefix = "", suffix = "", label }: {
   suffix?: string;
   label: string;
 }) {
-  const v = useCountUp(value, true, 1200);
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useReplayInView(ref);
+  const v = useCountUp(value, inView, 1200);
   const display =
     prefix === "$"
       ? usd(v)
       : v.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   return (
-    <div className="flex flex-col justify-center gap-1 px-6 py-8 text-center md:px-8">
+    <div ref={ref} className="flex flex-col justify-center gap-1 px-6 py-8 text-center md:px-8">
       <p className="text-[36px] font-semibold leading-[122%] tracking-[-0.06em] tabular-nums">
         {prefix === "$" ? display : `${display}${suffix}`}
       </p>
@@ -126,7 +128,6 @@ export function FaqSection() {
         <div className="grid gap-10 lg:grid-cols-12">
           <div className="lg:col-span-4">
             <span className="flex items-center gap-1.5 text-[13px] font-medium tracking-[-0.01em] text-muted-foreground">
-              <Sparkle size={11} className="text-gold" />
               FAQ
             </span>
             <h2 className="mt-3 text-[32px] font-medium leading-[122%] tracking-[-0.03em] sm:text-4xl">

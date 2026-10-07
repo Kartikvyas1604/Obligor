@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { ShieldCheck, Unlock, EyeOff, Cpu, ChevronLeft, ChevronRight } from "lucide-react";
-import { Sparkle } from "@/components/sparkle";
 
 const STEPS = [
   {
@@ -50,7 +49,6 @@ export function HowItWorksVisual() {
       <div className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <span className="mb-1 flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-muted-foreground">
-            <Sparkle size={11} className="text-gold" />
             How it works
           </span>
           <h2 className="text-2xl font-medium tracking-[-0.02em] text-foreground sm:text-3xl">

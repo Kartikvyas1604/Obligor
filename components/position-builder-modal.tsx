@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, X, Sparkles, TrendingUp, TrendingDown } from "lucide-react";
+import { Plus, X, TrendingUp, TrendingDown, ListPlus } from "lucide-react";
 import { type PartyId, type PositionLeg, type Venue, type Side } from "@/lib/margin";
 
 interface PositionBuilderModalProps {
@@ -65,7 +65,7 @@ export function PositionBuilderModal({
         <div className="flex items-center justify-between border-b border-border pb-4">
           <div>
             <div className="inline-flex items-center gap-1.5 font-mono text-xs text-foreground uppercase tracking-wider">
-              <Sparkles className="h-3 w-3" />
+              <ListPlus className="h-3 w-3" aria-hidden />
               <span>Custom Trade Builder</span>
             </div>
             <h3 className="text-xl font-bold text-foreground tracking-tight mt-1">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, Unlock, CheckCircle2, Sparkles } from "lucide-react";
+import { Lock, Unlock, CheckCircle2 } from "lucide-react";
 import { usd as usdFmt } from "@/lib/margin";
 
 interface EscrowVaultCardProps {
@@ -162,7 +162,7 @@ export function EscrowVaultCard({
 
         {escrowState === "released" && (
           <div className="rounded-xl border border-border p-5 text-center space-y-2">
-            <Sparkles className="h-6 w-6 text-foreground mx-auto" aria-hidden />
+            <CheckCircle2 className="h-6 w-6 text-success mx-auto" aria-hidden />
             <h4 className="text-base font-bold text-foreground">Settlement complete</h4>
             <p className="text-xs text-muted-foreground max-w-md mx-auto">
               {usdFmt(savingsUsd)} was released back to the desks. Capital efficiency improved by{" "}

@@ -180,25 +180,6 @@ body {
   -webkit-text-stroke: 2px var(--wordmark-stroke);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .twinkle {
-    animation: twinkle 3.2s ease-in-out infinite;
-    transform-box: fill-box;
-    transform-origin: center;
-  }
-  @keyframes twinkle {
-    0%,
-    100% {
-      opacity: 0.55;
-      transform: scale(0.8);
-    }
-    50% {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-}
-
 .btn-light {
   background: var(--primary);
   color: var(--primary-foreground);

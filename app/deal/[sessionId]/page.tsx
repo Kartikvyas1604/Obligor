@@ -9,7 +9,6 @@ import {
   Lock,
   Plus,
   Trash2,
-  Sparkles,
 } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { MarginHero } from "@/components/margin-hero";
@@ -432,7 +431,7 @@ export default function LiveDealPage({
                 onClick={handleExecuteClear}
                 className="btn-press inline-flex items-center gap-2 rounded-full bg-primary px-8 py-3 text-sm font-bold text-primary-foreground transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50"
               >
-                <Sparkles className="h-4 w-4" aria-hidden />
+                <Lock className="h-4 w-4" aria-hidden />
                 <span>Run confidential netting</span>
               </button>
             )}

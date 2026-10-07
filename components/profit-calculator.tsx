@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { Sparkle } from "@/components/sparkle";
 
 const PRESETS = [
   { label: "$1M · DeFi trader", val: 1_000_000, apy: 22 },
@@ -37,7 +36,6 @@ export function ProfitCalculator() {
       <div className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <span className="mb-1 flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-muted-foreground">
-            <Sparkle size={11} className="text-gold" />
             Capital calculator
           </span>
           <h2 className="text-2xl font-medium tracking-[-0.02em] text-foreground sm:text-3xl">
