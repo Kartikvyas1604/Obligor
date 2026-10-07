@@ -65,7 +65,7 @@ export function MarginHero({
           >
             {usd(nettedValue)}
           </p>
-          <p className="mt-1 font-mono text-xs text-muted-foreground tabular-nums">
+          <p className="mt-1 break-all font-mono text-xs text-muted-foreground tabular-nums">
             net exposure {usd(Math.abs(result.netExposureUsd))}
           </p>
           <div className="mt-5 max-w-sm text-right md:text-left">

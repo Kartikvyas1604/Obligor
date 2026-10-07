@@ -214,7 +214,7 @@ function AgentTerminal({
           <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
             View Live API Response Payload (Confidential JSON)
           </summary>
-          <pre className="mt-2 max-h-48 overflow-auto rounded bg-card p-2 text-[11px] text-muted-foreground">
+          <pre className="mt-2 max-h-48 overflow-auto rounded bg-card p-2 text-[11px] leading-relaxed text-muted-foreground">
             {responseJson}
           </pre>
         </details>
@@ -309,14 +309,14 @@ export default function AgentsPage() {
             <span className="ml-2 font-mono text-xs text-muted-foreground">networks, assets, headers</span>
           </summary>
           <div className="mt-4 grid gap-4 md:grid-cols-2 font-mono text-xs text-muted-foreground">
-            <div className="rounded border border-border/80 bg-background/50 p-3">
+            <div className="break-all rounded border border-border/80 bg-background/50 p-3">
               <p className="font-medium text-foreground">Solana Devnet x402</p>
               <p className="mt-1">Scheme: exact</p>
               <p>Network: solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1</p>
               <p>Asset: 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU (USDC)</p>
               <p>Price: $0.01 (10,000 base units)</p>
             </div>
-            <div className="rounded border border-border/80 bg-background/50 p-3">
+            <div className="break-all rounded border border-border/80 bg-background/50 p-3">
               <p className="font-medium text-foreground">Monad Testnet x402</p>
               <p className="mt-1">Scheme: exact</p>
               <p>Network: eip155:10143</p>

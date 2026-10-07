@@ -59,7 +59,8 @@ export default function TrustPage() {
         </section>
 
         <section aria-label="Real versus mocked" className="overflow-hidden rounded-lg border border-border bg-card">
-          <table className="w-full text-left text-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] text-left text-sm">
             <caption className="sr-only">Real versus mocked components</caption>
             <thead>
               <tr className="border-b border-border">
@@ -83,6 +84,7 @@ export default function TrustPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </section>
 
         <section aria-label="What production still needs" className="rounded-lg border border-border bg-card p-6">
