@@ -101,6 +101,11 @@ export const POST = withApi<{ sessionId: string }>(async ({ req, params }) => {
     }
 
     case "clear": {
+      if (session.partyA.legs.length === 0 && (session.partyB?.legs.length ?? 0) === 0) {
+        throw ApiError.badRequest(
+          "Both books are empty — add positions on at least one desk before netting",
+        );
+      }
       try {
         const updated = await clearDealSession(sessionId);
         if (!updated) {

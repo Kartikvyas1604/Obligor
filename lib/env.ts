@@ -40,6 +40,8 @@ const nonNegativeNumber = (fallback: number) =>
 export const chainSchema = z.enum(["solana", "monad"]);
 export type Chain = z.infer<typeof chainSchema>;
 
+const isProdBuild = process.env.NODE_ENV === "production";
+
 const envSchema = z.object({
   runtime: z.object({
     nodeEnv: z.string().optional().default("development"),
@@ -48,9 +50,10 @@ const envSchema = z.object({
   }),
 
   demo: z.object({
-    // Demo-only fixture books and unpaid calls. Locked OFF in production.
-    allowFixtures: boolish(false),
-    allowUnpaid: boolish(false),
+    // Demo-only fixture books and unpaid calls. Dev convenience default ON;
+    // locked OFF in production unless explicitly enabled (and then warned).
+    allowFixtures: boolish(!isProdBuild),
+    allowUnpaid: boolish(!isProdBuild),
   }),
 
   store: z.object({
