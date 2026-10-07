@@ -1,32 +1,43 @@
-import { NextRequest, NextResponse } from "next/server";
-import { solanaPartyA, solanaPartyB } from "@/lib/fixtures";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { ApiError, parseBody, rateLimitFor, readJsonBody, withApi } from "@/lib/http";
+import { priceAndNormalizeLegs } from "@/lib/positions";
+import { chainSchema } from "@/lib/env";
 
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const party = searchParams.get("party")?.toUpperCase() || "A";
-  const wallet = searchParams.get("wallet");
-  const chain = searchParams.get("chain") || "solana";
+const bodySchema = z.object({
+  party: z.enum(["A", "B"]),
+  wallet: z.string().trim().min(32).max(64),
+  chain: chainSchema.default("solana"),
+  label: z.string().trim().max(40).optional(),
+  legs: z.array(z.unknown()).max(64).optional(),
+});
 
-  // Return only the requested party's book
-  if (party === "B") {
-    return NextResponse.json({
-      party: "B",
-      chain,
-      wallet: wallet || solanaPartyB.wallet,
-      label: solanaPartyB.label,
-      legs: solanaPartyB.legs,
-      fetchedAt: new Date().toISOString(),
-      warnings: [],
-    });
+/**
+ * POST /api/v1/positions
+ * Validate + oracle-price a desk's leg list and return the normalized book.
+ * No server-side default books: the caller supplies the legs they want priced.
+ */
+export const POST = withApi(async ({ req }) => {
+  rateLimitFor("default", req);
+  const body = parseBody(bodySchema, await readJsonBody(req));
+
+  if (!body.legs || body.legs.length === 0) {
+    throw ApiError.badRequest("Provide at least one leg to price — Obligor does not invent positions");
   }
 
+  const priced = await priceAndNormalizeLegs(body.party, body.legs, { source: "manual" });
+
   return NextResponse.json({
-    party: "A",
-    chain,
-    wallet: wallet || solanaPartyA.wallet,
-    label: solanaPartyA.label,
-    legs: solanaPartyA.legs,
+    ok: true,
+    book: {
+      party: body.party,
+      wallet: body.wallet,
+      chain: body.chain,
+      label: body.label ?? `Desk ${body.party}`,
+      legs: priced.legs,
+      warnings: priced.warnings,
+    },
+    priceSources: priced.priceSources,
     fetchedAt: new Date().toISOString(),
-    warnings: [],
   });
-}
+});

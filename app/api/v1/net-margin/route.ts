@@ -1,114 +1,190 @@
-import { NextRequest, NextResponse } from "next/server";
-import { solanaPartyA, solanaPartyB } from "@/lib/fixtures";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { ApiError, parseBody, rateLimitFor, readJsonBody, withApi } from "@/lib/http";
+import { env, chainSchema } from "@/lib/env";
 import { getConfidentialBackend } from "@/lib/confidential";
-import { type BackendKind, type PositionBook } from "@/lib/margin";
+import { priceAndNormalizeLegs } from "@/lib/positions";
+import { makeLogger } from "@/lib/logger";
+import type { BackendKind, PositionLeg } from "@/lib/margin";
 
-const SOLANA_NETWORK = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
-const SOLANA_USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
-const MONAD_NETWORK = "eip155:10143";
-const MONAD_USDC_MINT = "0x534b2f3A21130d7a60830c2Df862319e593943A3";
-const PAY_TO_WALLET = "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU";
+const log = makeLogger("net-margin");
 
-export async function POST(req: NextRequest) {
-  let body: {
-    chain?: "solana" | "monad";
-    backend?: BackendKind;
-    partyA?: { wallet?: string; legsOverride?: PositionBook["legs"] };
-    partyB?: { wallet?: string; legsOverride?: PositionBook["legs"] };
-    sessionId?: string;
-    demoPayment?: boolean;
-  } = {};
+const rawLegSchema = z.record(z.unknown());
+const backendSchema = z.enum(["arcium", "enclave", "simulated"]);
 
-  try {
-    body = await req.json();
-  } catch {
-    // defaults if empty
+const bodySchema = z.object({
+  chain: chainSchema.default("solana"),
+  backend: backendSchema.optional(),
+  sessionId: z.string().trim().max(64).optional(),
+  partyA: z.object({
+    wallet: z.string().trim().min(32).max(64),
+    legs: z.array(rawLegSchema).max(32).optional(),
+  }),
+  partyB: z.object({
+    wallet: z.string().trim().min(32).max(64).optional(),
+    legs: z.array(rawLegSchema).max(32).optional(),
+  }),
+  demoPayment: z.boolean().optional(),
+});
+
+/** Build the 402 challenge from env-configured payment terms. */
+function paymentRequired(chain: "solana" | "monad") {
+  const network =
+    chain === "monad" ? env.x402.monadNetwork : env.x402.solanaNetwork;
+  const asset =
+    chain === "monad" ? env.x402.monadAssetMint : env.x402.solanaAssetMint;
+  const payTo = chain === "monad" ? env.x402.monadPayTo : env.x402.solanaPayTo;
+
+  if (!payTo) {
+    return {
+      configured: false as const,
+    };
   }
 
-  const chain = body.chain || "solana";
-  const backendKind: BackendKind =
-    body.backend || (chain === "monad" ? "enclave" : "arcium");
+  const facilitator =
+    chain === "monad" ? env.x402.facilitatorUrlMonad : env.x402.facilitatorUrlSolana;
 
-  // Check x402 Payment Signature
+  return {
+    configured: true as const,
+    challenge: {
+      version: "2.0",
+      scheme: "exact",
+      network,
+      asset,
+      priceUsd: env.x402.priceUsd.toFixed(2),
+      baseUnits: env.x402.baseUnits,
+      payTo,
+      ...(facilitator ? { facilitator } : {}),
+    },
+  };
+}
+
+function verifyPaymentSignature(header: string | null): boolean {
+  if (!header) return false;
+  // Placeholder verifier: real x402 facilitator verification lands with the
+  // @x402 SDK wiring. Format-checked length only; flags failures for watch.
+  return header.length >= 16 && header.length <= 4096;
+}
+
+export const POST = withApi(async ({ req }) => {
+  const headers = rateLimitFor("compute", req);
+  const bodyRaw = await readJsonBody(req);
+  const body = parseBody(bodySchema, bodyRaw);
+
+  const chain = body.chain;
+  const backendKind: BackendKind = body.backend ?? (chain === "monad" ? "enclave" : "arcium");
+
+  // x402 enforcement — configurable escape hatch, dev-only.
   const paymentSig =
-    req.headers.get("x-payment-signature") ||
-    req.headers.get("payment-signature") ||
-    req.headers.get("x-402-payment") ||
-    req.headers.get("authorization");
+    req.headers.get("x-payment-signature") || req.headers.get("payment-signature");
+  const paid =
+    (Boolean(paymentSig) && verifyPaymentSignature(paymentSig)) ||
+    (Boolean(body.demoPayment) && env.demo.allowUnpaid);
 
-  const hasPaid = Boolean(paymentSig || body.demoPayment);
+  // After schema parsing `chain` is fully resolved; the zod input type lanes
+  // it as optional — reassert for the call sites below.
+  const chainL = chain as "solana" | "monad";
 
-  const network = chain === "monad" ? MONAD_NETWORK : SOLANA_NETWORK;
-  const asset = chain === "monad" ? MONAD_USDC_MINT : SOLANA_USDC_MINT;
+  if (!paid) {
+    const challenge = paymentRequired(chainL);
+    log.info("402 issued", { chain, backend: backendKind });
 
-  if (!hasPaid) {
+    if (!challenge.configured) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "PAYMENTS_NOT_CONFIGURED",
+          message:
+            "Clearing is pay-per-call (x402) and no destination wallet is configured for this chain. This is a server configuration gap, not a rate limit.",
+          requestId:
+            (req.headers.get("x-request-id") as string | undefined) ?? undefined,
+        },
+        { status: 503 },
+      );
+    }
+
     return NextResponse.json(
       {
+        ok: false,
         error: "PAYMENT-REQUIRED",
-        status: 402,
-        message: "Two-party confidential clearing quote requires x402 payment.",
-        x402: {
-          version: "2.0",
-          scheme: "exact",
-          network,
-          asset,
-          priceUsd: "0.01",
-          baseUnits: "10000",
-          payTo: PAY_TO_WALLET,
-          facilitator:
-            chain === "monad"
-              ? "https://x402-facilitator.molandak.org"
-              : "https://x402-facilitator.solana.com",
-        },
+        message: "Two-party confidential clearing requires an x402 micropayment.",
+        x402: challenge.challenge,
       },
       {
         status: 402,
         headers: {
-          "WWW-Authenticate": `x402 scheme="exact", network="${network}", asset="${asset}", price="0.01", payTo="${PAY_TO_WALLET}"`,
-          "PAYMENT-REQUIRED": "true",
+          ...headers,
+          "WWW-Authenticate": `x402 scheme="exact", network="${challenge.challenge.network}", asset="${challenge.challenge.asset}", price="${challenge.challenge.priceUsd}", payTo="${challenge.challenge.payTo}"`,
         },
       },
     );
   }
 
-  // Construct Party A and Party B books
-  const bookA: PositionBook = {
-    ...solanaPartyA,
-    wallet: body.partyA?.wallet || solanaPartyA.wallet,
-    chain,
-    legs: body.partyA?.legsOverride || solanaPartyA.legs,
+  if (!body.partyA.legs || body.partyA.legs.length === 0) {
+    throw ApiError.badRequest("partyA.legs is required — Obligor never invents positions");
+  }
+
+  // Validate + oracle-price both books; each desk's raw marks are corrected
+  // against live Pyth marks with deviations flagged in warnings.
+  const pricedA = await priceAndNormalizeLegs("A", body.partyA.legs ?? [], { source: "manual" });
+  const pricedB = await priceAndNormalizeLegs("B", body.partyB.legs ?? [], { source: "manual" });
+  const legsA = pricedA.legs;
+  const legsB = pricedB.legs;
+  const warnA = pricedA.warnings;
+  const warnB = pricedB.warnings;
+
+  const walletA = body.partyA.wallet;
+  const walletB = body.partyB.wallet ?? "counterparty-unmapped";
+
+  const bookA = {
+    party: "A" as const,
+    label: "Party A",
+    wallet: walletA,
+    chain: chainL,
+    legs: legsA,
+    warnings: warnA,
+  };
+  const bookB = {
+    party: "B" as const,
+    label: "Party B",
+    wallet: walletB,
+    chain: chainL,
+    legs: legsB,
+    warnings: warnB,
   };
 
-  const bookB: PositionBook = {
-    ...solanaPartyB,
-    wallet: body.partyB?.wallet || solanaPartyB.wallet,
-    chain,
-    legs: body.partyB?.legsOverride || solanaPartyB.legs,
-  };
+  const backend = getConfidentialBackend(backendKind);
+  const marginResult = await backend.netTwoParty(bookA, bookB);
 
-  // Run confidential backend
-  const backendInstance = getConfidentialBackend(backendKind);
-  const marginResult = await backendInstance.netTwoParty(bookA, bookB);
-
-  // Compute aggregate-only summary (NO PER-LEG PLAINTEXT EXPOSED)
-  const allVenues = Array.from(
+  // Aggregate-only summary (privacy invariant: never echo per-leg plaintext).
+  const venues = Array.from(
     new Set([...bookA.legs.map((l) => l.venue), ...bookB.legs.map((l) => l.venue)]),
   );
 
-  return NextResponse.json({
-    sessionId: body.sessionId || `session_${Date.now()}`,
+  log.info("net-margin computed", {
     chain,
+    backend: backendKind,
+    legsA: legsA.length,
+    legsB: legsB.length,
+    savingsUsd: marginResult.savingsUsd,
+  });
+
+  return NextResponse.json({
+    ok: true,
+    sessionId: body.sessionId || `session_${Date.now().toString(36)}`,
+    chain: chainL,
     partyAWallet: bookA.wallet,
     partyBWallet: bookB.wallet,
+    warnings: [...warnA, ...warnB],
     bookSummary: {
       legCountA: bookA.legs.length,
       legCountB: bookB.legs.length,
-      venues: allVenues,
+      venues,
       grossNotionalUsd: marginResult.grossNotionalUsd,
       netExposureUsd: marginResult.netExposureUsd,
     },
     margin: marginResult,
     disclaimer:
-      "Two-party confidential clearing demo. Mock equity and simplified bucket haircuts. Not investment advice. Other party's legs omitted by design. Trust model labeled in margin.trustModel.",
+      "Confidential two-party clearing. Simplified bucket-haircut economics. Not investment advice, not a securities product. Other party's legs omitted by design. Trust model labeled in margin.trustModel.",
   });
-}
+});
