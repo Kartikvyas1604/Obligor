@@ -276,10 +276,10 @@ export default function Home() {
 
         <section
           aria-hidden
-          className="overflow-hidden border-t border-border py-10 md:py-16"
+          className="overflow-hidden border-t border-border py-10 md:py-16 [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]"
         >
           <Marquee duration={60}>
-            <span className="font-display whitespace-nowrap text-[120px] font-semibold leading-none tracking-[-0.03em] md:text-[220px]">
+            <span className="font-display block whitespace-nowrap text-[120px] font-semibold leading-[1.25] tracking-[-0.03em] md:text-[200px]">
               <span className="wordmark-stroke">Obligor&nbsp;&nbsp;&nbsp;&nbsp;Obligor&nbsp;&nbsp;&nbsp;&nbsp;Obligor&nbsp;&nbsp;&nbsp;&nbsp;</span>
             </span>
           </Marquee>
