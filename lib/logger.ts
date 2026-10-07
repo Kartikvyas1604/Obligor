@@ -1,6 +1,10 @@
 /**
- * Structured JSON logging with levels and request correlation.
- * Machine-parseable in production; human-readable defaults locally.
+ * Structured JSON logging with levels.
+ *
+ * BROWSER-SAFE: no Node built-ins at module scope. The request-id lookup
+ * reads a storage instance published by lib/request-context.server.ts
+ * (polluted on globalThis), so the same emitter works in Route Handlers
+ * and degrades gracefully (no ids) anywhere else.
  */
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
@@ -36,9 +40,21 @@ type CurrentLevel = () => LogLevel;
 
 // Lazy level resolution: `env` imports this module, so avoid a circular load.
 const currentLevel: CurrentLevel = () => {
-  const lvl = (process.env.LOG_LEVEL || (process.env.NODE_ENV === "production" ? "info" : "debug")) as LogLevel;
+  const lvl = (process.env.LOG_LEVEL ||
+    (process.env.NODE_ENV === "production" ? "info" : "debug")) as LogLevel;
   return LEVEL_WEIGHT[lvl] ? lvl : "debug";
 };
+
+export function readCurrentRequestId(): string | undefined {
+  const storage = (globalThis as { __obligorRequestStorage?: { getStore?: () => { requestId: string } | undefined } })
+    .__obligorRequestStorage;
+  if (!storage?.getStore || typeof storage.getStore !== "function") return undefined;
+  try {
+    return storage.getStore()?.requestId;
+  } catch {
+    return undefined;
+  }
+}
 
 function emit(level: LogLevel, component: string, message: string, meta?: Record<string, unknown>) {
   if (LEVEL_WEIGHT[level] < LEVEL_WEIGHT[currentLevel()]) return;
@@ -48,14 +64,14 @@ function emit(level: LogLevel, component: string, message: string, meta?: Record
     level,
     component,
     message,
-    request_id: currentRequestId(),
+    request_id: readCurrentRequestId(),
     ...(meta ? { meta: redact(meta) } : {}),
   };
 
   const line = JSON.stringify(record);
   if (level === "error") console.error(line);
   else if (level === "warn") console.warn(line);
-  else console.log(line);
+  else if (typeof console.info === "function") console.log(line);
 }
 
 export function makeLogger(component: string) {
@@ -68,20 +84,3 @@ export function makeLogger(component: string) {
 }
 
 export const logger = makeLogger("app");
-
-/** Per-request correlation helper (uses AsyncLocalStorage when available). */
-import { AsyncLocalStorage } from "node:async_hooks";
-
-const requestStorage = new AsyncLocalStorage<{ requestId: string }>();
-
-export function withRequestContext<T>(requestId: string, fn: () => T): T {
-  return requestStorage.run({ requestId }, fn);
-}
-
-export function currentRequestId(): string | undefined {
-  return requestStorage.getStore()?.requestId;
-}
-
-export function newRequestId(): string {
-  return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
-}

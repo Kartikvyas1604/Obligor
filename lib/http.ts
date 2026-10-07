@@ -7,7 +7,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { ZodType } from "zod";
 import { env } from "./env";
-import { makeLogger, newRequestId, withRequestContext } from "./logger";
+import { makeLogger } from "./logger";
+import { newRequestId } from "./request-ids";
+import { withRequestContext } from "./request-context.server";
 const log = makeLogger("http");
 
 /** Standard error the API returns; `message` is safe for display. */
