@@ -215,19 +215,3 @@ export function emptyBook(
     warnings: [],
   };
 }
-
-/** Legacy alias retained for the demo toggle on /clear until C13 rewires it. */
-export function createMockEquityLeg(
-  party: "A" | "B",
-  side: "long" | "short",
-  notionalUsd: number,
-): Promise<PositionLeg> {
-  return buildOraclePricedLeg(party, {
-    venue: "mock_equity",
-    instrument: `tAAPL ${side}`,
-    bucket: "AAPL",
-    side,
-    notionalUsd,
-    source: "manual",
-  });
-}
