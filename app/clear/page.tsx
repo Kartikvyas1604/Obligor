@@ -306,6 +306,7 @@ export default function ClearPage() {
   }
 
   const busy = phase === "computing";
+  const stages = stagesFor(backend);
 
   return (
     <PageShell>
