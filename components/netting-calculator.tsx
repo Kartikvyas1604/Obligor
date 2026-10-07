@@ -1,19 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Calculator } from "lucide-react";
 import { twoPartyNetted, twoPartySiloed, usd, type PositionBook } from "@/lib/margin";
 
 const MAX = 250_000;
 const STEP = 500;
-const SOL_MARK = 142.5;
+const FALLBACK_SOL_MARK = 142.5; // labeled last-resort benchmark, replaced by live mark when the oracle answers
 
-function makeBook(party: "A" | "B", notional: number): PositionBook {
+type MarkStatus = "loading" | "live" | "stale" | "fallback" | "error";
+
+function makeBook(party: "A" | "B", notional: number, markUsd: number): PositionBook {
   const shortSide = party === "B";
   return {
     party,
     label: party === "A" ? "Calculator A" : "Calculator B",
-    wallet: party === "A" ? "demo-party-a" : "demo-party-b",
+    wallet: party === "A" ? "calculator-party-a" : "calculator-party-b",
     chain: "solana",
     warnings: [],
     legs: [
@@ -23,12 +25,12 @@ function makeBook(party: "A" | "B", notional: number): PositionBook {
         instrument: shortSide ? "SOL-PERP short" : "SOL lend",
         bucket: "SOL",
         side: shortSide ? "short" : "lend",
-        qty: notional / SOL_MARK,
+        qty: notional / markUsd,
         notionalUsd: notional,
         signedExposureUsd: shortSide ? -notional : notional,
         haircut: shortSide ? 0.15 : 0.1,
-        markUsd: SOL_MARK,
-        source: "manual",
+        markUsd,
+        source: markUsd === FALLBACK_SOL_MARK ? "manual" : "live",
       },
     ],
   };
@@ -109,6 +111,31 @@ function Bar({ pct, tone }: { pct: number; tone: "muted" | "primary" | "success"
 export function NettingCalculator() {
   const [aText, setAText] = useState("45,000");
   const [bText, setBText] = useState("95,000");
+  const [markStatus, setMarkStatus] = useState<MarkStatus>("loading");
+  const [solMark, setSolMark] = useState(FALLBACK_SOL_MARK);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/v1/oracle/prices", { cache: "no-store" });
+        if (!res.ok) throw new Error(String(res.status));
+        const data = (await res.json()) as { prices: Record<string, { priceUsd: number; status: "live" | "stale" | "fallback" } | null> };
+        const mark = data.prices?.SOL?.priceUsd;
+        if (!cancelled && mark) {
+          setSolMark(mark);
+          setMarkStatus(data.prices.SOL!.status);
+        } else if (!cancelled) {
+          setMarkStatus("fallback");
+        }
+      } catch {
+        if (!cancelled) setMarkStatus("error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const parse = (t: string) => {
     const digits = t.replace(/[^0-9]/g, "").slice(0, 7);
@@ -121,8 +148,8 @@ export function NettingCalculator() {
   const setB = (t: string) => setBText(Number(parse(t)).toLocaleString("en-US"));
 
   const books = useMemo(
-    () => ({ a: makeBook("A", aVal), b: makeBook("B", bVal) }),
-    [aVal, bVal],
+    () => ({ a: makeBook("A", aVal, solMark), b: makeBook("B", bVal, solMark) }),
+    [aVal, bVal, solMark],
   );
 
   const siloed = useMemo(
@@ -150,9 +177,15 @@ export function NettingCalculator() {
           <Calculator className="h-4 w-4 text-primary" aria-hidden />
           <h2 className="text-xl font-medium tracking-tight">Live netting calculator</h2>
         </div>
-        <span className="rounded-full border border-border px-3 py-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          simulated · same formula as the sealed path
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full border border-border px-3 py-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            simulated · same formula as the sealed path
+          </span>
+          <span className="rounded-full border border-border px-3 py-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground" title={`SOL mark ${usd(solMark)} — ${markStatus}`}>
+            SOL mark {usd(solMark, 2)} ·{" "}
+            {markStatus === "loading" ? "checking Pyth…" : markStatus === "live" ? "live Pyth" : markStatus === "stale" ? "stale Pyth" : "desk benchmark"}
+          </span>
+        </div>
       </div>
 
       <div className="mt-6 grid gap-8 lg:grid-cols-[1.15fr_1fr]">
