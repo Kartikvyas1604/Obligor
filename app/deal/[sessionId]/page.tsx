@@ -2,14 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import {
-  Users,
-  Copy,
-  Check,
-  Lock,
-  Plus,
-  Trash2,
-} from "lucide-react";
+import { Users, ShieldAlert, Check, Copy, Plus, Trash2, Lock } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { MarginHero } from "@/components/margin-hero";
 import { PositionBuilderModal } from "@/components/position-builder-modal";
@@ -17,6 +10,13 @@ import { EscrowVaultCard } from "@/components/escrow-vault-card";
 import { ExposureBars } from "@/components/charts";
 import { type DealSession } from "@/lib/deal-session";
 import { type PositionLeg, type PartyId, usd, siloedIm } from "@/lib/margin";
+
+const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+function makeDemoWalletB(): string {
+  const bytes = new Uint8Array(44);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => B58[b % B58.length]).join("");
+}
 
 function truncate(addr: string, len = 6) {
   if (!addr || addr.length <= len * 2 + 3) return addr;
@@ -35,6 +35,9 @@ export default function LiveDealPage({
   const [copiedLink, setCopiedLink] = useState(false);
   const [builderOpen, setBuilderOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [sealError, setSealError] = useState<string | null>(null);
+  const [clearError, setClearError] = useState<string | null>(null);
 
   // Poll session every 1.5 seconds for true real-time multi-device sync
   useEffect(() => {
@@ -72,29 +75,20 @@ export default function LiveDealPage({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "join",
-          walletB: "7F3P9qN2L8XwK1vE4mY5tA6bC7dE8fG9h0j1k2l3m4n5",
+          // Simulated guest gets a runtime-generated demo wallet; its book
+          // starts EMPTY — the host builds positions for it after joining.
+          walletB: makeDemoWalletB(),
           labelB: "Desk B (Counterparty)",
-          legsB: [
-            {
-              party: "B",
-              venue: "drift",
-              instrument: "SOL-PERP",
-              bucket: "crypto_sol",
-              side: "short",
-              qty: 700,
-              notionalUsd: 100_000,
-              signedExposureUsd: -100_000,
-              haircut: 0.15,
-              markUsd: 142.85,
-              source: "live",
-            },
-          ],
+          legsB: [],
         }),
       });
       if (res.ok) {
         const data = await res.json();
         setSession(data.session);
         setMyRole("B");
+      } else {
+        const body = (await res.json().catch(() => null)) as { message?: string } | null;
+        setJoinError(body?.message ?? `Could not join (${res.status})`);
       }
     } finally {
       setActionBusy(false);
@@ -135,16 +129,26 @@ export default function LiveDealPage({
 
   async function handleSealBook() {
     setActionBusy(true);
+    setSealError(null);
     try {
-      await fetch(`/api/v1/sessions/${sessionId}`, {
+      // Faithful demo seal: derives a fresh digest of the leg book (never a
+      // fabricated transaction). The real seal comes from wallet signature.
+      const digest = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(JSON.stringify(myParty?.legs ?? [])),
+      );
+      const signature = "sig_" + Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+      const res = await fetch(`/api/v1/sessions/${sessionId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "seal",
-          partyId: myRole,
-          signature: "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""),
-        }),
+        body: JSON.stringify({ action: "seal", partyId: myRole, signature }),
       });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { message?: string } | null;
+        setSealError(body?.message ?? `Sealing failed (${res.status})`);
+      }
+    } catch {
+      setSealError("Network error while sealing your book");
     } finally {
       setActionBusy(false);
     }
@@ -152,12 +156,19 @@ export default function LiveDealPage({
 
   async function handleExecuteClear() {
     setActionBusy(true);
+    setClearError(null);
     try {
-      await fetch(`/api/v1/sessions/${sessionId}`, {
+      const res = await fetch(`/api/v1/sessions/${sessionId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "clear" }),
       });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { message?: string } | null;
+        setClearError(body?.message ?? `Clearing failed (${res.status})`);
+      }
+    } catch {
+      setClearError("Network error while running the confidential netting");
     } finally {
       setActionBusy(false);
     }
@@ -394,6 +405,21 @@ export default function LiveDealPage({
             );
           })}
         </div>
+
+        {(joinError || sealError || clearError) && (
+          <div role="alert" className="flex items-start gap-3 rounded-2xl border border-destructive/40 bg-destructive/5 p-4">
+            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden />
+            <div className="text-sm space-y-2">
+              <p className="font-semibold text-destructive">Room action failed</p>
+              <p className="text-muted-foreground">{joinError ?? sealError ?? clearError ?? ""}</p>
+              {clearError && (
+                <button type="button" onClick={() => void handleExecuteClear()} className="text-xs font-semibold text foreground underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  Retry confidential netting
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Action Controls: Seal & Clear */}
         <div className="rounded-2xl border border-border bg-card p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

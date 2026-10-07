@@ -5,33 +5,42 @@ import { useRouter } from "next/navigation";
 import { Users, ArrowRight } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { WalletConnect } from "@/components/wallet-connect";
-import { solanaPartyA } from "@/lib/fixtures";
 import { type BackendKind } from "@/lib/margin";
 
 export default function DealLauncherPage() {
   const router = useRouter();
-  const [wallet, setWallet] = useState<string>(solanaPartyA.wallet);
-  const [label, setLabel] = useState<string>("My Trading Desk");
+  const [wallet, setWallet] = useState<string>("");
+  const [label, setLabel] = useState<string>("");
   const [backend, setBackend] = useState<BackendKind>("arcium");
   const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleCreateSession() {
+    setError(null);
+    if (!wallet.trim() || wallet.trim().length < 32) {
+      setError("Enter a desk wallet address (32+ characters) or connect a wallet.");
+      return;
+    }
     setCreating(true);
     try {
       const res = await fetch("/api/v1/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          walletA: wallet,
-          labelA: label,
-          legsA: solanaPartyA.legs,
+          walletA: wallet.trim(),
+          labelA: label.trim() || "Desk A (Initiator)",
           backend,
         }),
       });
       if (res.ok) {
         const data = await res.json();
         router.push(`/deal/${data.session.sessionId}`);
+        return;
       }
+      const body = (await res.json().catch(() => null)) as { message?: string } | null;
+      setError(body?.message ?? `Could not create the deal room (${res.status}).`);
+    } catch {
+      setError("Network error — could not reach the deal room service.");
     } finally {
       setCreating(false);
     }
@@ -57,6 +66,11 @@ export default function DealLauncherPage() {
 
         {/* Creation Card */}
         <div className="rounded-[28px] border border-border bg-card p-6 sm:p-10 space-y-6 shadow-2xl">
+          {error && (
+            <div role="alert" className="rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
+              {error}
+            </div>
+          )}
           {/* Desk Label */}
           <div className="space-y-2">
             <label htmlFor="desk-label" className="text-xs font-semibold text-muted-foreground">
@@ -68,7 +82,7 @@ export default function DealLauncherPage() {
               type="text"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
-              placeholder="e.g. Wintermute Desk Alpha"
+              placeholder="e.g. Desk Alpha"
               autoComplete="organization"
               className="w-full h-11 rounded-xl border border-border bg-secondary px-4 font-mono text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />

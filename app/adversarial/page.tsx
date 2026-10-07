@@ -3,39 +3,80 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, ShieldAlert } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ShieldAlert, LoaderCircle, RotateCcw } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { BookColumn } from "@/components/book-column";
-import { adversarialBooks } from "@/lib/fixtures";
-import { twoPartyNetted, twoPartySiloed, usd } from "@/lib/margin";
+import { type PositionBook, type NetMarginResult } from "@/lib/margin";
 
+interface AdversarialPayload {
+  partyA: PositionBook;
+  partyB: PositionBook;
+  siloed: { siloedA: number; siloedB: number; siloedCombined: number };
+  netted: NetMarginResult;
+}
+
+/**
+ * Adversarial counterfactual screen. The plaintext books come ONLY from the
+ * rate-limited, acknowledgment-gated demo endpoint — never baked into the
+ * client bundle. Disabled deployments show an honest error state instead.
+ */
 export default function AdversarialPage() {
   const router = useRouter();
   const [confirmed, setConfirmed] = useState(false);
+  const [data, setData] = useState<AdversarialPayload | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(20);
 
-  const siloed = useMemo(
-    () => twoPartySiloed(adversarialBooks.a, adversarialBooks.b),
-    [],
-  );
-  const netted = useMemo(
-    () => twoPartyNetted(adversarialBooks.a, adversarialBooks.b),
-    [],
-  );
+  const siloedCombined = data?.siloed?.siloedCombined ?? 0;
+  const netted = data?.netted ?? null;
+  const savingsPct =
+    netted && siloedCombined > 0 ? Math.round((netted.savingsUsd / siloedCombined) * 100) : 0;
+
+  async function loadBooks() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/v1/demo/adversarial-plaintext", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ iUnderstandThisLeaksBothBooks: true }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { message?: string } | null;
+        setError(body?.message ?? `Request failed (${res.status})`);
+        return;
+      }
+      const payload = (await res.json()) as {
+        partyA: PositionBook;
+        partyB: PositionBook;
+        siloed: AdversarialPayload["siloed"];
+        netted: NetMarginResult;
+      };
+      setData(payload);
+    } catch {
+      setError("Network error — could not reach the demo endpoint.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    if (!confirmed || secondsLeft === 0) return;
+    if (!confirmed) return;
+    void loadBooks();
+  }, [confirmed]);
+
+  useEffect(() => {
+    if (!confirmed || !data || secondsLeft === 0) return;
     const t = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
     return () => clearTimeout(t);
-  }, [confirmed, secondsLeft]);
-
-  const expired = secondsLeft === 0;
+  }, [confirmed, data, secondsLeft]);
 
   useEffect(() => {
-    if (!confirmed || !expired) return;
+    if (!confirmed || !data || secondsLeft !== 0) return;
     const t = setTimeout(() => router.push("/clear"), 400);
     return () => clearTimeout(t);
-  }, [confirmed, expired, router]);
+  }, [confirmed, data, secondsLeft, router]);
 
   if (!confirmed) {
     return (
@@ -72,6 +113,46 @@ export default function AdversarialPage() {
     );
   }
 
+  if (error) {
+    return (
+      <PageShell>
+        <div className="mx-auto max-w-xl py-20 text-center space-y-4">
+          <ShieldAlert className="mx-auto h-10 w-10 text-destructive" aria-hidden />
+          <h1 className="text-2xl font-bold">Demo unavailable in this environment</h1>
+          <p className="text-sm text-muted-foreground">{error}</p>
+          <div className="flex flex-wrap justify-center gap-3">
+            <button
+              type="button"
+              onClick={loadBooks}
+              className="inline-flex h-11 items-center gap-2 rounded-full bg-primary px-6 text-sm font-bold text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden />
+              Retry
+            </button>
+            <Link
+              href="/clear"
+              className="inline-flex h-11 items-center rounded-full border border-border px-6 text-sm font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" aria-hidden />
+              Back to confidential session
+            </Link>
+          </div>
+        </div>
+      </PageShell>
+    );
+  }
+
+  if (loading || !data) {
+    return (
+      <PageShell>
+        <div className="py-24 text-center space-y-3" aria-live="polite" aria-busy="true">
+          <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-muted-foreground motion-reduce:animate-none" aria-hidden />
+          <p className="text-sm font-mono text-muted-foreground">Rendering the operator's plaintext view…</p>
+        </div>
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell>
       <div className="flex flex-col gap-8">
@@ -85,7 +166,7 @@ export default function AdversarialPage() {
             them. That is why single-operator clearing fails — and why self-netting one wallet does
             not need MPC.
           </p>
-          {confirmed && secondsLeft > 0 && !expired && (
+          {secondsLeft > 0 && (
             <p className="mt-2 font-mono text-xs tabular-nums text-muted-foreground">
               Auto-return to confidential session in {secondsLeft}s
             </p>
@@ -94,15 +175,15 @@ export default function AdversarialPage() {
 
         <section aria-label="Both books in plaintext" className="grid gap-6 lg:grid-cols-2">
           <BookColumn
-            title={`Party A — ${adversarialBooks.a.label} (PLAINTEXT)`}
-            wallet={adversarialBooks.a.wallet}
-            legs={adversarialBooks.a.legs}
+            title={`Party A — ${data.partyA.label} (PLAINTEXT)`}
+            wallet={data.partyA.wallet}
+            legs={data.partyA.legs}
             hidden={false}
           />
           <BookColumn
-            title={`Party B — ${adversarialBooks.b.label} (PLAINTEXT)`}
-            wallet={adversarialBooks.b.wallet}
-            legs={adversarialBooks.b.legs}
+            title={`Party B — ${data.partyB.label} (PLAINTEXT)`}
+            wallet={data.partyB.wallet}
+            legs={data.partyB.legs}
             hidden={false}
           />
         </section>
@@ -110,11 +191,14 @@ export default function AdversarialPage() {
         <section aria-label="What the operator could compute" className="rounded-lg border border-border bg-card p-6">
           <h2 className="text-sm font-medium">The operator&rsquo;s temptation</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Combined siloed margin {usd(siloed.siloedCombined)} collapses to{" "}
-            {usd(netted.nettedCombinedUsd)} netted ({usd(netted.savingsUsd)} freed) —{" "}
-            <span className="text-foreground">
-              but the operator needed both books in plaintext to compute it.
-            </span>{" "}
+            Combined siloed margin {siloedCombined.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })}{" "}
+            collapses to{" "}
+            {netted!.nettedCombinedUsd.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })}{" "}
+            netted ({savingsPct}% freed —{" "}
+            <span className="inline">
+              {netted!.savingsUsd.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })}){" "}
+            </span>
+            — <span className="text-foreground">but the operator needed both books in plaintext to compute it.</span>{" "}
             The confidential path produces the same numbers with sealed inputs.
           </p>
           <div className="mt-4 flex flex-wrap gap-3">

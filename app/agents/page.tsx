@@ -6,49 +6,13 @@ import { Play } from "lucide-react";
 
 type Line = { text: string; cls?: string };
 
-const AGENT_A_MOCK_LINES: Line[] = [
-  { text: "$ pnpm demo:agent-a", cls: "t-line" },
-  { text: "→ key: disposable agent key A (devnet, spend-cap 1 USDC)", cls: "t-muted" },
-  { text: "→ POST /api/v1/net-margin", cls: "t-muted" },
-  { text: "← 402 PAYMENT-REQUIRED (scheme: exact, asset: devnet USDC)", cls: "t-err" },
-  { text: "→ generating cryptographic payment signature: x402_sig_sol_...a_valid", cls: "t-muted" },
-  { text: "→ paying 10,000 base units ($0.01 USDC)", cls: "t-muted" },
-  { text: "← 200 OK · siloedA: $26,750 · nettedCombined: $24,500 · savings: $22,000", cls: "t-ok" },
-  { text: "PRIVACY INVARIANT: Counterparty legs omitted from response", cls: "t-muted" },
-];
-
-const AGENT_B_MOCK_LINES: Line[] = [
-  { text: "$ pnpm demo:agent-b", cls: "t-line" },
-  { text: "→ key: independent disposable key B (separate custody)", cls: "t-muted" },
-  { text: "→ POST /api/v1/net-margin", cls: "t-muted" },
-  { text: "← 402 PAYMENT-REQUIRED (scheme: exact, price: $0.01)", cls: "t-err" },
-  { text: "→ signing payment authorization with Agent B secret key", cls: "t-muted" },
-  { text: "→ paying 10,000 base units ($0.01 USDC)", cls: "t-muted" },
-  { text: "← 200 OK · siloedB: $19,750 · nettedCombined: $24,500 · backend: arcium", cls: "t-ok" },
-  { text: "PRIVACY INVARIANT: Desk Alpha legs omitted from response", cls: "t-muted" },
-];
-
-const AGENT_MONAD_LINES: Line[] = [
-  { text: "$ pnpm demo:agent-monad", cls: "t-line" },
-  { text: "→ batch: 3 desk pairs submitted to Monad clearing epoch", cls: "t-muted" },
-  { text: "→ POST /api/v1/net-margin/parallel", cls: "t-muted" },
-  { text: "← 200 OK · concurrency: 3 pairs · epochDuration: 48ms", cls: "t-ok" },
-  { text: "→ Attestation: provider nitro (verified: true, pcr0: e3b0c44...)", cls: "t-muted" },
-  { text: "  • Desk C ↔ D (MON): Siloed $18,250 → Netted $11,250 (Freed $7,000)", cls: "t-muted" },
-  { text: "  • Desk E ↔ F (ETH): Siloed $14,700 → Netted $8,700 (Freed $6,000)", cls: "t-muted" },
-  { text: "  • Desk G ↔ H (tAAPL): Siloed $22,500 → Netted $11,250 (Freed $11,250)", cls: "t-muted" },
-  { text: "Monad parallel clearing throughput verified", cls: "t-ok" },
-];
-
 function AgentTerminal({
   title,
-  defaultLines,
   endpoint,
   payload,
   requires402 = true,
 }: {
   title: string;
-  defaultLines: Line[];
   endpoint: string;
   payload: Record<string, unknown>;
   requires402?: boolean;
@@ -56,6 +20,33 @@ function AgentTerminal({
   const [running, setRunning] = useState(false);
   const [lines, setLines] = useState<Line[]>([]);
   const [responseJson, setResponseJson] = useState<string | null>(null);
+
+  const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  function makeAgentWallet(): string {
+    const bytes = new Uint8Array(44);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => B58[b % B58.length]).join("");
+  }
+
+  /** Runtime agent book generated from LIVE oracle marks — nothing baked into the bundle. */
+  async function buildPayload(): Promise<Record<string, unknown>> {
+    try {
+      const res = await fetch("/api/v1/oracle/prices", { cache: "no-store" });
+      if (!res.ok) throw new Error("oracle");
+      const data = (await res.json()) as { prices: Record<string, { priceUsd: number } | null> };
+      const sol = data.prices?.SOL?.priceUsd ?? 0;
+      if (!sol) throw new Error("oracle-missing");
+      const legsA = [{ venue: "kamino", instrument: "SOL lend", bucket: "SOL", side: "lend", qty: 700, markUsd: sol }];
+      const legsB = [{ venue: "drift", instrument: "SOL-PERP", bucket: "SOL", side: "short", qty: 700, markUsd: sol }];
+      return {
+        ...(payload.chain ? payload : { chain: "solana", backend: "arcium" }),
+        partyA: { wallet: makeAgentWallet(), legs: legsA },
+        partyB: { wallet: makeAgentWallet(), legs: legsB },
+      };
+    } catch {
+      throw new Error("ORACLE_UNAVAILABLE — retry when the oracle endpoint answers");
+    }
+  }
 
   async function executeAgent() {
     setRunning(true);
@@ -70,12 +61,24 @@ function AgentTerminal({
           { text: `→ Calling POST ${endpoint} without payment header...`, cls: "t-muted" },
         ]);
 
+        const fullPayload = await buildPayload();
         const res1 = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(fullPayload),
         });
 
+        if (res1.status !== 402) {
+          const body = (await res1.json().catch(() => null)) as { message?: string; error?: string } | null;
+          setLines((prev) => [
+            ...prev,
+            {
+              text: `✖ unexpected ${res1.status}: ${body?.error ?? body?.message ?? "no body"} — fix payment config, then retry`,
+              cls: "t-err",
+            },
+          ]);
+          return;
+        }
         if (res1.status === 402) {
           const ch = await res1.json();
           setLines((prev) => [
@@ -92,10 +95,18 @@ function AgentTerminal({
               "Content-Type": "application/json",
               "x-payment-signature": `demo_sig_${Date.now()}`,
             },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(fullPayload),
           });
 
-          if (res2.ok) {
+          if (!res2.ok) {
+            const body = (await res2.json().catch(() => null)) as { message?: string } | null;
+            setLines((prev) => [
+              ...prev,
+              { text: `✖ paid call rejected: ${body?.message ?? res2.status}`, cls: "t-err" },
+            ]);
+            return;
+          }
+          {
             const data = await res2.json();
             setResponseJson(JSON.stringify(data, null, 2));
             setLines((prev) => [
@@ -112,10 +123,20 @@ function AgentTerminal({
           }
         }
       } else {
+        // Parallel branch: same runtime-built offsetting legs, three wallets each side.
+        const fullPayload = await buildPayload();
         const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            chain: "monad",
+            pairs: [1, 2, 3].map((n) => ({
+              pairId: `p${n}`,
+              label: `Desk ${2 * n - 1} ↔ Desk ${2 * n}`,
+              a: (fullPayload.partyA as { wallet: string; legs: unknown[] }),
+              b: (fullPayload.partyB as { wallet: string; legs: unknown[] }),
+            })),
+          }),
         });
         if (res.ok) {
           const data = await res.json();
@@ -126,16 +147,24 @@ function AgentTerminal({
               text: `← 200 OK · Concurrency: ${data.concurrency} pairs · Epoch: ${data.epochId}`,
               cls: "t-ok",
             },
-            {
-              text: `⚡ Hardware TEE Attestation: ${data.attestation?.provider} (verified: true)`,
-              cls: "t-ok",
-            },
+            data.attestation
+              ? { text: `Enclave attestation metadata: provider ${data.attestation.provider}${data.attestation.note ? " (honesty note attached)" : ""}`, cls: "t-muted" }
+              : { text: "✖ no attestation metadata present — trust model stays labeled, not claimed", cls: "t-err" },
+          ]);
+        } else {
+          const body = (await res.json().catch(() => null)) as { message?: string } | null;
+          setLines((prev) => [
+            ...prev,
+            { text: `✖ epoch rejected: ${body?.message ?? res.status}`, cls: "t-err" },
           ]);
         }
       }
-    } catch {
-      // Fallback replay
-      setLines(defaultLines);
+    } catch (err) {
+      setLines((prev) => [
+        ...prev,
+        { text: `✖ ${err instanceof Error ? err.message : "network error"}`, cls: "t-err" },
+        { text: "  press Run Live Agent to retry", cls: "t-muted" },
+      ]);
     } finally {
       setRunning(false);
     }
@@ -158,7 +187,7 @@ function AgentTerminal({
           disabled={running}
           className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-3 text-xs transition-colors duration-100 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
         >
-          <Play className="h-3 w-3" />
+          <Play className="h-3 w-3" aria-hidden />
           {running ? "Executing…" : "Run Live Agent"}
         </button>
       </header>
@@ -247,14 +276,12 @@ export default function AgentsPage() {
         <div className="grid gap-6 lg:grid-cols-2">
           <AgentTerminal
             title="demo-agent-a (Solana Party A)"
-            defaultLines={AGENT_A_MOCK_LINES}
             endpoint="/api/v1/net-margin"
             payload={{ chain: "solana", backend: "arcium" }}
             requires402={true}
           />
           <AgentTerminal
             title="demo-agent-b (Solana Party B)"
-            defaultLines={AGENT_B_MOCK_LINES}
             endpoint="/api/v1/net-margin"
             payload={{ chain: "solana", backend: "arcium" }}
             requires402={true}
@@ -269,7 +296,6 @@ export default function AgentsPage() {
           <div className="mt-4">
             <AgentTerminal
               title="demo-agent-monad (Parallel Multi-Pair Epoch)"
-              defaultLines={AGENT_MONAD_LINES}
               endpoint="/api/v1/net-margin/parallel"
               payload={{}}
               requires402={false}
