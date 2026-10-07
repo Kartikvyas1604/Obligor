@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, X, Sparkles, TrendingUp, TrendingDown, Shield } from "lucide-react";
+import { Plus, X, Sparkles, TrendingUp, TrendingDown } from "lucide-react";
 import { type PartyId, type PositionLeg, type Venue, type Side } from "@/lib/margin";
 
 interface PositionBuilderModalProps {

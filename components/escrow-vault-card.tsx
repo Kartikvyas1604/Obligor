@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, Unlock, CheckCircle2, ShieldCheck, ArrowRight, Wallet, Sparkles, ExternalLink } from "lucide-react";
+import { Lock, Unlock, CheckCircle2, Sparkles } from "lucide-react";
+import { usd as usdFmt } from "@/lib/margin";
 
 interface EscrowVaultCardProps {
   siloedMarginA: number;
@@ -42,14 +43,17 @@ export function EscrowVaultCard({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border pb-4">
         <div>
           <span className="font-mono text-xs uppercase tracking-wider text-foreground block mb-1">
-            Smart Contract Settlement
+            Step 4 · Settlement
           </span>
           <h3 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-2">
-            <span>Bilateral Escrow Vault</span>
+            <span>Escrow vault</span>
             <span className="text-xs font-normal text-muted-foreground font-mono">
-              ({backend === "arcium" ? "Solana Anchor Program" : "Monad EVM Contract"})
+              ({backend === "arcium" ? "Solana program" : "Monad contract"})
             </span>
           </h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Both desks post the net margin into escrow; whatever isn&rsquo;t needed comes straight back.
+          </p>
         </div>
 
         <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1 text-xs">
@@ -115,10 +119,10 @@ export function EscrowVaultCard({
         {escrowState === "idle" && (
           <button
             onClick={handleSimulateEscrow}
-            className="w-full flex items-center justify-center gap-2 rounded-full bg-primary py-3.5 px-6 font-semibold text-primary-foreground transition-colors duration-150 text-sm"
+            className="w-full flex items-center justify-center gap-2 rounded-full bg-primary py-3.5 px-6 font-semibold text-primary-foreground transition-colors duration-150 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
-            <Lock className="h-4 w-4" />
-            <span>Deposit Net Margin to Escrow Vault (${netMargin.toLocaleString()} Total)</span>
+            <Lock className="h-4 w-4" aria-hidden />
+            <span>Deposit net margin to escrow ({usdFmt(netMargin)} total)</span>
           </button>
         )}
 
@@ -133,11 +137,11 @@ export function EscrowVaultCard({
           <div className="space-y-3">
             <div className="rounded-xl border border-success/30 bg-success/10 p-4 text-xs text-success space-y-1">
               <div className="flex items-center gap-2 font-bold">
-                <CheckCircle2 className="h-4 w-4 text-success" />
-                <span>Net Margin Secured in Escrow!</span>
+                <CheckCircle2 className="h-4 w-4 text-success" aria-hidden />
+                <span>Net margin secured in escrow</span>
               </div>
               <p className="text-foreground">
-                Both counterparties deposited ${halfNetMargin.toLocaleString()}. A total of ${savingsUsd.toLocaleString()} is verified as excess margin.
+                Both desks deposited {usdFmt(halfNetMargin)}. {usdFmt(savingsUsd)} is verified as excess margin, ready to release.
               </p>
               {txHash && (
                 <div className="pt-1 font-mono text-[11px] text-muted-foreground break-all">
@@ -148,26 +152,27 @@ export function EscrowVaultCard({
 
             <button
               onClick={handleReleaseExcess}
-              className="w-full flex items-center justify-center gap-2 rounded-full bg-success py-3.5 px-6 font-bold text-primary-foreground hover:bg-success transition-colors duration-150 text-sm shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+              className="w-full flex items-center justify-center gap-2 rounded-full bg-success py-3.5 px-6 font-bold text-primary-foreground transition-colors duration-150 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
-              <Unlock className="h-4 w-4" />
-              <span>Claim &amp; Release Freed Capital (+${savingsUsd.toLocaleString()})</span>
+              <Unlock className="h-4 w-4" aria-hidden />
+              <span>Release freed capital ({usdFmt(savingsUsd)})</span>
             </button>
           </div>
         )}
 
         {escrowState === "released" && (
           <div className="rounded-xl border border-border p-5 text-center space-y-2">
-            <Sparkles className="h-6 w-6 text-foreground mx-auto" />
-            <h4 className="text-base font-bold text-foreground">Settlement Complete!</h4>
+            <Sparkles className="h-6 w-6 text-foreground mx-auto" aria-hidden />
+            <h4 className="text-base font-bold text-foreground">Settlement complete</h4>
             <p className="text-xs text-muted-foreground max-w-md mx-auto">
-              ${savingsUsd.toLocaleString()} has been unlocked and credited back to the desks. Capital efficiency increased by {Math.round((savingsUsd / (siloedMarginA + siloedMarginB)) * 100)}%.
+              {usdFmt(savingsUsd)} was released back to the desks. Capital efficiency improved by{" "}
+              {Math.round((savingsUsd / (siloedMarginA + siloedMarginB)) * 100)}%.
             </p>
             <button
               onClick={() => setEscrowState("idle")}
-              className="mt-2 text-xs text-foreground hover:underline font-mono"
+              className="mt-2 text-xs text-foreground hover:underline font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              Reset Simulation
+              Reset simulation
             </button>
           </div>
         )}

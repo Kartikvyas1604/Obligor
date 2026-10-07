@@ -6,24 +6,17 @@ import {
   Users,
   Copy,
   Check,
-  ShieldCheck,
   Lock,
-  Unlock,
   Plus,
   Trash2,
-  Cpu,
   Sparkles,
-  ArrowRight,
-  RotateCcw,
-  Wallet,
-  ExternalLink,
-  Layers,
 } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { MarginHero } from "@/components/margin-hero";
 import { PositionBuilderModal } from "@/components/position-builder-modal";
 import { EscrowVaultCard } from "@/components/escrow-vault-card";
-import { type DealSession, type SessionParty } from "@/lib/deal-session";
+import { ExposureBars } from "@/components/charts";
+import { type DealSession } from "@/lib/deal-session";
 import { type PositionLeg, type PartyId, usd, siloedIm } from "@/lib/margin";
 
 function truncate(addr: string, len = 6) {
@@ -41,7 +34,6 @@ export default function LiveDealPage({
   const [loading, setLoading] = useState(true);
   const [myRole, setMyRole] = useState<"A" | "B">("A");
   const [copiedLink, setCopiedLink] = useState(false);
-  const [copiedInvite, setCopiedInvite] = useState(false);
   const [builderOpen, setBuilderOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
 
@@ -178,8 +170,8 @@ export default function LiveDealPage({
     return (
       <PageShell>
         <div className="py-24 text-center space-y-3">
-          <div className="animate-spin inline-block h-8 w-8 border-2 border-foreground border-t-transparent rounded-full" />
-          <p className="text-sm font-mono text-muted-foreground">Connecting to Live Real-Time Relay...</p>
+          <div className="animate-spin inline-block h-8 w-8 border-2 border-foreground border-t-transparent rounded-full motion-reduce:animate-none" />
+          <p className="text-sm font-mono text-muted-foreground">Creating your deal room…</p>
         </div>
       </PageShell>
     );
@@ -189,14 +181,14 @@ export default function LiveDealPage({
     return (
       <PageShell>
         <div className="py-24 text-center space-y-4">
-          <h2 className="text-2xl font-bold text-foreground">Deal Session Not Found</h2>
-          <p className="text-sm text-muted-foreground">This bilateral clearing session has expired or does not exist.</p>
-          <Link
-            href="/deal"
-            className="inline-flex h-11 items-center gap-2 rounded-full bg-primary px-6 text-sm font-bold text-primary-foreground"
-          >
-            Create New Deal Room
-          </Link>
+        <h2 className="text-2xl font-bold text-foreground">This deal room is gone</h2>
+        <p className="text-sm text-muted-foreground">It may have expired, or the link doesn&rsquo;t exist. Start a fresh one below.</p>
+        <Link
+          href="/deal"
+          className="inline-flex h-11 items-center gap-2 rounded-full bg-primary px-6 text-sm font-bold text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          Create a new deal room
+        </Link>
         </div>
       </PageShell>
     );
@@ -214,11 +206,11 @@ export default function LiveDealPage({
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border pb-6">
           <div>
             <div className="inline-flex items-center gap-2 font-mono text-xs text-foreground uppercase tracking-wider mb-1">
-              <Users className="h-3.5 w-3.5" />
-              <span>Live Bilateral Clearing Terminal</span>
+              <Users className="h-3.5 w-3.5" aria-hidden />
+              <span>Private deal room</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight flex items-center gap-3">
-              <span>Deal Room:</span>
+              <span>Clear together</span>
               <span className="font-mono text-sm sm:text-base text-foreground bg-secondary px-3 py-1 rounded-lg border border-border">
                 {truncate(session.sessionId, 8)}
               </span>
@@ -229,24 +221,19 @@ export default function LiveDealPage({
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground font-mono">Viewing as:</span>
             <div className="inline-flex rounded-full border border-border bg-card p-0.5">
-              <button
-                type="button"
-                onClick={() => setMyRole("A")}
-                className={`rounded-full px-4 py-1 font-mono text-xs transition-colors ${
-                  myRole === "A" ? "bg-primary text-primary-foreground font-bold" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Desk A (Host)
-              </button>
-              <button
-                type="button"
-                onClick={() => setMyRole("B")}
-                className={`rounded-full px-4 py-1 font-mono text-xs transition-colors ${
-                  myRole === "B" ? "bg-primary text-primary-foreground font-bold" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Desk B (Guest)
-              </button>
+              {(["A", "B"] as const).map((role) => (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => setMyRole(role)}
+                  aria-pressed={myRole === role}
+                  className={`rounded-full px-4 py-1 font-mono text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    myRole === role ? "bg-primary text-primary-foreground font-bold" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Desk {role} ({role === "A" ? "host" : "guest"})
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -256,7 +243,7 @@ export default function LiveDealPage({
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-3">
               <span className="relative flex h-3 w-3">
-                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 motion-reduce:animate-none ${
                   session.partyB ? "bg-success" : "bg-foreground"
                 }`} />
                 <span className={`relative inline-flex rounded-full h-3 w-3 ${
@@ -265,16 +252,16 @@ export default function LiveDealPage({
               </span>
               <div>
                 <h3 className="text-sm font-bold text-foreground">
-                  {session.status === "waiting_for_party_b" && "Awaiting Counterparty Connection..."}
-                  {session.status === "both_connected" && "Counterparty Connected 🟢 (Drafting Positions)"}
-                  {session.status === "sealed" && "Both Portfolios Cryptographically Sealed 🔒"}
-                  {session.status === "cleared" && "Confidential Clearance Finalized ✨"}
-                  {session.status === "escrow_locked" && "Bilateral Escrow Secured on Smart Contract 💰"}
+                  {session.status === "waiting_for_party_b" && "Invite sent — waiting for the other desk to join"}
+                  {session.status === "both_connected" && "Both desks connected — drafting positions"}
+                  {session.status === "sealed" && "Both books sealed — ready to net"}
+                  {session.status === "cleared" && "Netting complete — see your result below"}
+                  {session.status === "escrow_locked" && "Escrow secured — settle to claim savings"}
                 </h3>
                 <p className="text-xs text-muted-foreground font-mono">
                   {session.partyB
                     ? `Desk A (${truncate(session.partyA.wallet)}) ⟷ Desk B (${truncate(session.partyB.wallet)})`
-                    : "Share the link below with your trading counterparty to collaborate in real-time."}
+                    : "Share the link below with your counterparty — it syncs live."}
                 </p>
               </div>
             </div>
@@ -288,10 +275,10 @@ export default function LiveDealPage({
                   setCopiedLink(true);
                   setTimeout(() => setCopiedLink(false), 2000);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary px-4 py-2 text-xs font-semibold text-foreground hover:border-foreground transition-colors duration-150"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary px-4 py-2 text-xs font-semibold text-foreground hover:border-foreground transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                {copiedLink ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
-                <span>{copiedLink ? "Link Copied!" : "Copy Shareable Link"}</span>
+                {copiedLink ? <Check className="h-3.5 w-3.5 text-success" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
+                <span>{copiedLink ? "Link copied" : "Copy invite link"}</span>
               </button>
 
               {!session.partyB && (
@@ -299,10 +286,10 @@ export default function LiveDealPage({
                   type="button"
                   disabled={actionBusy}
                   onClick={handleJoinAsPartyB}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:bg-foreground transition-colors duration-150"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:bg-foreground transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>Simulate Desk B Joining</span>
+                  <Plus className="h-3.5 w-3.5" aria-hidden />
+                  <span>Simulate Desk B joining</span>
                 </button>
               )}
             </div>
@@ -311,146 +298,110 @@ export default function LiveDealPage({
 
         {/* Bilateral Trade Books */}
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Party A Column */}
-          <div className="rounded-[24px] border border-border bg-card p-6 space-y-4 flex flex-col justify-between">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <div>
-                  <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-success" />
-                    <span>{session.partyA.label}</span>
-                    {myRole === "A" && <span className="text-[10px] bg-secondary px-2 py-0.5 rounded text-foreground font-mono">(You)</span>}
-                  </h3>
-                  <span className="font-mono text-xs text-muted-foreground">{truncate(session.partyA.wallet, 8)}</span>
+          {(
+            [
+              { role: "A" as const, party: session.partyA, exists: true, dot: "bg-success" },
+              { role: "B" as const, party: session.partyB ?? undefined, exists: !!session.partyB, dot: "bg-blue-400" },
+            ] satisfies Array<{ role: PartyId; party?: DealSession["partyA"]; exists: boolean; dot: string }>
+          ).map(({ role, party, exists, dot }) => {
+            const isMe = myRole === role;
+            const canEdit = isMe && !!party && !party.isSealed;
+            const legs = party?.legs ?? [];
+            return (
+              <div key={role} className="rounded-[24px] border border-border bg-card p-6 space-y-4 flex flex-col justify-between">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between border-b border-border pb-3">
+                    <div>
+                      <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                        <span className={`h-2 w-2 rounded-full ${dot}`} aria-hidden />
+                        <span>{party?.label || `Desk ${role}`}</span>
+                        {isMe && <span className="text-[10px] bg-secondary px-2 py-0.5 rounded text-foreground font-mono">(you)</span>}
+                      </h3>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {party ? truncate(party.wallet, 8) : "Not connected"}
+                      </span>
+                    </div>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => setBuilderOpen(true)}
+                        className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-3 py-1 text-xs font-semibold text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <Plus className="h-3 w-3" aria-hidden />
+                        <span>Add position</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {!exists ? (
+                    <div className="py-10 text-center space-y-3">
+                      <p className="text-xs text-muted-foreground">Desk {role} has not joined yet.</p>
+                      <button
+                        type="button"
+                        onClick={handleJoinAsPartyB}
+                        className="rounded-full border border-border bg-secondary px-4 py-1.5 text-xs text-foreground hover:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        Join as Desk {role}
+                      </button>
+                    </div>
+                  ) : legs.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-muted-foreground">
+                      {isMe ? "Add your first position to get started." : "This desk has no positions."}
+                    </div>
+                  ) : (
+                    <div>
+                      <ExposureBars legs={legs} />
+                      <ul className="border-t border-border">
+                        {legs.map((leg, i) => (
+                          <li key={i} className="flex items-center justify-between gap-3 border-b border-border last:border-0 px-1 py-3 text-xs">
+                            <div className="min-w-0">
+                              <div className="font-bold text-foreground flex items-center gap-1.5">
+                                <span>{leg.instrument}</span>
+                                <span className="text-[10px] bg-secondary px-1.5 py-0.5 rounded text-muted-foreground uppercase font-mono">{leg.venue}</span>
+                              </div>
+                              <span className="font-mono text-[11px] text-muted-foreground">
+                                {leg.qty} @ ${leg.markUsd} · haircut {(leg.haircut * 100).toFixed(0)}%
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`font-mono font-bold ${leg.signedExposureUsd < 0 ? "text-destructive" : "text-success"}`}>
+                                {leg.signedExposureUsd < 0 ? "−" : "+"}${Math.abs(leg.notionalUsd).toLocaleString()}
+                              </span>
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteLeg(i)}
+                                  aria-label={`Remove ${leg.instrument} position`}
+                                  className="p-1 rounded text-muted-foreground hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                                </button>
+                              )}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
-                {myRole === "A" && !session.partyA.isSealed && (
-                  <button
-                    type="button"
-                    onClick={() => setBuilderOpen(true)}
-                    className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-3 py-1 text-xs text-foreground hover:bg-secondary font-sans font-semibold"
-                  >
-                    <Plus className="h-3 w-3" />
-                    <span>Add Custom Leg</span>
-                  </button>
+
+                {party && (
+                  <div className="border-t border-border pt-3 flex justify-between items-center text-xs">
+                    <span className="text-muted-foreground">Margin held alone (siloed):</span>
+                    <span className="font-mono font-bold text-foreground text-sm">{usd(siloedIm(party.legs))}</span>
+                  </div>
                 )}
               </div>
-
-              {session.partyA.legs.length === 0 ? (
-                <div className="py-8 text-center text-xs text-muted-foreground">No active legs in book.</div>
-              ) : (
-                <ul className="space-y-2">
-                  {session.partyA.legs.map((leg, i) => (
-                    <li key={i} className="flex items-center justify-between p-3 rounded-xl bg-card border border-border text-xs">
-                      <div>
-                        <div className="font-bold text-foreground flex items-center gap-1.5">
-                          <span>{leg.instrument}</span>
-                          <span className="text-[10px] bg-secondary px-1.5 py-0.5 rounded text-muted-foreground uppercase font-mono">{leg.venue}</span>
-                        </div>
-                        <span className="font-mono text-[11px] text-muted-foreground">
-                          {leg.qty} @ ${leg.markUsd} &bull; haircut {(leg.haircut * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`font-mono font-bold ${leg.signedExposureUsd < 0 ? "text-red-400" : "text-success"}`}>
-                          {leg.signedExposureUsd < 0 ? "-" : "+"}${Math.abs(leg.notionalUsd).toLocaleString()}
-                        </span>
-                        {myRole === "A" && !session.partyA.isSealed && (
-                          <button type="button" onClick={() => handleDeleteLeg(i)} className="text-muted-foreground hover:text-red-400">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div className="border-t border-border pt-3 flex justify-between items-center text-xs">
-              <span className="text-muted-foreground">Siloed Margin Requirement:</span>
-              <span className="font-mono font-bold text-foreground text-sm">${siloedIm(session.partyA.legs).toLocaleString()}</span>
-            </div>
-          </div>
-
-          {/* Party B Column */}
-          <div className="rounded-[24px] border border-border bg-card p-6 space-y-4 flex flex-col justify-between">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <div>
-                  <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-blue-400" />
-                    <span>{session.partyB?.label || "Desk B (Awaiting Invite)"}</span>
-                    {myRole === "B" && <span className="text-[10px] bg-secondary px-2 py-0.5 rounded text-foreground font-mono">(You)</span>}
-                  </h3>
-                  <span className="font-mono text-xs text-muted-foreground">{session.partyB ? truncate(session.partyB.wallet, 8) : "Not connected"}</span>
-                </div>
-                {myRole === "B" && !session.partyB?.isSealed && (
-                  <button
-                    type="button"
-                    onClick={() => setBuilderOpen(true)}
-                    className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-3 py-1 text-xs text-foreground hover:bg-secondary font-sans font-semibold"
-                  >
-                    <Plus className="h-3 w-3" />
-                    <span>Add Custom Leg</span>
-                  </button>
-                )}
-              </div>
-
-              {!session.partyB ? (
-                <div className="py-10 text-center space-y-3">
-                  <p className="text-xs text-muted-foreground">Desk B has not joined this room yet.</p>
-                  <button
-                    type="button"
-                    onClick={handleJoinAsPartyB}
-                    className="rounded-full border border-border bg-secondary px-4 py-1.5 text-xs text-foreground hover:border-foreground"
-                  >
-                    Join as Desk B
-                  </button>
-                </div>
-              ) : (
-                <ul className="space-y-2">
-                  {session.partyB.legs.map((leg, i) => (
-                    <li key={i} className="flex items-center justify-between p-3 rounded-xl bg-card border border-border text-xs">
-                      <div>
-                        <div className="font-bold text-foreground flex items-center gap-1.5">
-                          <span>{leg.instrument}</span>
-                          <span className="text-[10px] bg-secondary px-1.5 py-0.5 rounded text-muted-foreground uppercase font-mono">{leg.venue}</span>
-                        </div>
-                        <span className="font-mono text-[11px] text-muted-foreground">
-                          {leg.qty} @ ${leg.markUsd} &bull; haircut {(leg.haircut * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`font-mono font-bold ${leg.signedExposureUsd < 0 ? "text-red-400" : "text-success"}`}>
-                          {leg.signedExposureUsd < 0 ? "-" : "+"}${Math.abs(leg.notionalUsd).toLocaleString()}
-                        </span>
-                        {myRole === "B" && session.partyB && !session.partyB.isSealed && (
-                          <button type="button" onClick={() => handleDeleteLeg(i)} className="text-muted-foreground hover:text-red-400">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div className="border-t border-border pt-3 flex justify-between items-center text-xs">
-              <span className="text-muted-foreground">Siloed Margin Requirement:</span>
-              <span className="font-mono font-bold text-foreground text-sm">
-                ${session.partyB ? siloedIm(session.partyB.legs).toLocaleString() : "0"}
-              </span>
-            </div>
-          </div>
+            );
+          })}
         </div>
 
         {/* Action Controls: Seal & Clear */}
         <div className="rounded-2xl border border-border bg-card p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="space-y-1">
-            <h4 className="text-sm font-bold text-foreground">Bilateral Cryptographic Actions</h4>
+            <h4 className="text-sm font-bold text-foreground">Three quick steps</h4>
             <p className="text-xs text-muted-foreground">
-              Both parties must sign and seal their position books before confidential clearance can run.
+              1. Set your positions · 2. Both desks seal · 3. Net and see your savings.
             </p>
           </div>
 
@@ -460,17 +411,17 @@ export default function LiveDealPage({
                 type="button"
                 disabled={actionBusy}
                 onClick={handleSealBook}
-                className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-6 py-3 text-xs font-bold text-foreground hover:bg-secondary"
+                className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-6 py-3 text-xs font-bold text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
               >
-                <Lock className="h-4 w-4" />
-                <span>Sign &amp; Seal My Portfolio (Desk {myRole})</span>
+                <Lock className="h-4 w-4" aria-hidden />
+                <span>Seal my book (Desk {myRole})</span>
               </button>
             )}
 
             {myParty?.isSealed && (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-4 py-2 text-xs font-mono text-success">
-                <Check className="h-3.5 w-3.5" />
-                <span>Desk {myRole} Sealed</span>
+                <Check className="h-3.5 w-3.5" aria-hidden />
+                <span>Desk {myRole} sealed</span>
               </span>
             )}
 
@@ -479,10 +430,10 @@ export default function LiveDealPage({
                 type="button"
                 disabled={actionBusy}
                 onClick={handleExecuteClear}
-                className="inline-flex items-center gap-2 rounded-full bg-primary px-8 py-3 text-sm font-bold text-primary-foreground transition-colors duration-150"
+                className="btn-press inline-flex items-center gap-2 rounded-full bg-primary px-8 py-3 text-sm font-bold text-primary-foreground transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50"
               >
-                <Sparkles className="h-4 w-4" />
-                <span>Execute Confidential Netting</span>
+                <Sparkles className="h-4 w-4" aria-hidden />
+                <span>Run confidential netting</span>
               </button>
             )}
           </div>

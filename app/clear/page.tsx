@@ -2,14 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle,
   Cpu,
   LoaderCircle,
   Lock,
   Plus,
   RotateCcw,
   Wallet,
-  Sparkles,
   Layers,
   ArrowRight,
 } from "lucide-react";
@@ -247,13 +245,14 @@ export default function ClearPage() {
           <div>
             <div className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-foreground mb-1">
               <Layers className="h-3.5 w-3.5" />
-              <span>Institutional Clearing Terminal</span>
+              <span>Confidential clearing</span>
             </div>
             <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
-              Confidential Two-Party Clearing
+              Clear two books in one step
             </h1>
             <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-              Two desks, one net initial margin. Encrypted computation ensures zero strategy leakage between competitors.
+              Set up both desks&rsquo; positions, run a confidential computation, and see how much
+              margin you free up together — neither side ever sees the other&rsquo;s book.
             </p>
           </div>
           <BackendBadge kind={backend} showNote />
@@ -262,16 +261,16 @@ export default function ClearPage() {
         {/* 4-Step Interactive Progress Stepper */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { num: "01", label: "Select Strategy", active: true, done: phase !== "setup" },
-            { num: "02", label: "Pair Counterparty", active: true, done: phase !== "setup" },
-            { num: "03", label: "Confidential Netting", active: phase === "computing" || phase === "done", done: phase === "done" },
-            { num: "04", label: "Escrow Settle & Claim", active: phase === "done", done: false },
+            { num: "01", label: "Set up your book", active: true, done: phase !== "setup" },
+            { num: "02", label: "Add counterparty", active: true, done: phase !== "setup" },
+            { num: "03", label: "Run netting", active: phase === "computing" || phase === "done", done: phase === "done" },
+            { num: "04", label: "Settle & claim savings", active: phase === "done", done: false },
           ].map((s) => (
             <div
               key={s.num}
               className={`rounded-2xl border p-3.5 transition-colors duration-150 ${
                 s.done
-                  ? "bg-success/40 bg-success/5 text-success"
+                  ? "border-success/40 bg-success/5 text-success"
                   : s.active
                   ? "border-foreground/60 bg-card text-foreground shadow-[0_0_15px_rgba(197,154,63,0.08)]"
                   : "border-border bg-card text-muted-foreground"
@@ -291,22 +290,30 @@ export default function ClearPage() {
         {/* Backend & Mode Selector */}
         <section aria-label="Backend selection" className="rounded-2xl border border-border bg-card p-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Cpu className="h-4 w-4 text-foreground" aria-hidden />
               <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Confidential Backend:
+                How should the math run?
               </span>
-              <div className="inline-flex rounded-lg border border-border bg-secondary p-0.5">
+              <div className="inline-flex flex-wrap rounded-lg border border-border bg-secondary p-0.5">
                 {[
-                  { id: "arcium", label: "Arcium MPC (Solana)" },
-                  { id: "enclave", label: "Nitro TEE (Monad)" },
-                  { id: "simulated", label: "Simulated Local" },
+                  { id: "arcium", label: "MPC — strongest (Solana)" },
+                  { id: "enclave", label: "Enclave TEE (Monad)" },
+                  { id: "simulated", label: "Local simulation" },
                 ].map((b) => (
                   <button
                     key={b.id}
                     type="button"
                     onClick={() => setBackend(b.id as BackendKind)}
-                    className={`rounded-md px-3 py-1 font-mono text-xs transition-colors duration-150 ${
+                    title={
+                      b.id === "arcium"
+                        ? "Both books stay encrypted end-to-end. No one — not even Obligor — can read them."
+                        : b.id === "enclave"
+                        ? "Books are sealed inside hardware-attested encryption. Same formula, different trust model."
+                        : "Runs the exact same formula in your browser. Great for learning how netting works."
+                    }
+                    aria-pressed={backend === b.id}
+                    className={`rounded-md px-3 py-1 font-mono text-xs transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                       backend === b.id
                         ? "bg-primary text-primary-foreground font-semibold shadow-sm"
                         : "text-muted-foreground hover:text-foreground"
@@ -318,25 +325,31 @@ export default function ClearPage() {
               </div>
             </div>
 
-            <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+            <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-xs text-muted-foreground focus-within:outline-none focus-within:ring-2 focus-within:ring-ring">
               <input
                 type="checkbox"
                 checked={useLiveApi}
                 onChange={(e) => setUseLiveApi(e.target.checked)}
-                className="rounded border-border "
+                className="rounded border-border"
               />
-              <span>Route via Live API Gateway (<code className="text-foreground">/api/v1/net-margin</code>)</span>
+              <span>Advanced: route via live API (<code className="text-foreground">/api/v1/net-margin</code>)</span>
             </label>
           </div>
+          {backend === "simulated" && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Simulation runs the exact same formula your sealed session would — nothing here is simplified for the demo.
+            </p>
+          )}
         </section>
 
         {phase === "setup" && (
           <section aria-label="Party setup" className="rounded-2xl border border-border bg-card p-5 md:p-6 space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-border pb-4">
               <div>
-                <h2 className="text-base font-bold text-foreground">Step 1 &amp; 2: Portfolio Strategy &amp; Counterparty Binding</h2>
+                <h2 className="text-base font-bold text-foreground">Steps 1 &amp; 2: Your desk and your counterparty</h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Select a live trading scenario or enter custom wallet addresses.
+                  Pick a ready-made scenario, or paste your own wallet addresses. Addresses are only
+                  read, never traded from.
                 </p>
               </div>
 
@@ -346,16 +359,16 @@ export default function ClearPage() {
                 <button
                   type="button"
                   onClick={loadFixture}
-                  className="rounded-full border border-border bg-secondary px-3 py-1 text-xs text-muted-foreground hover:border-foreground hover:text-foreground transition-colors"
+                  className="rounded-full border border-border bg-secondary px-3 py-1 text-xs text-muted-foreground hover:border-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  ⚡ SOL Basis Trade (Offsetting)
+                  SOL basis trade (offsetting)
                 </button>
                 <button
                   type="button"
                   onClick={loadAdversarialFixture}
-                  className="rounded-full border border-border bg-secondary px-3 py-1 text-xs text-muted-foreground hover:border-red-500/50 hover:text-foreground transition-colors"
+                  className="rounded-full border border-border bg-secondary px-3 py-1 text-xs text-muted-foreground hover:border-destructive/50 hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  ⚠️ High-Exposure Portfolio
+                  High exposure (what not to do)
                 </button>
               </div>
             </div>
@@ -364,18 +377,18 @@ export default function ClearPage() {
               <div className="rounded-xl border border-border bg-card p-4">
                 <div className="flex items-center justify-between">
                   <label htmlFor="wallet-a" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-success" />
-                    <span>Party A (Your Trading Desk)</span>
+                    <span className="h-2 w-2 rounded-full bg-success" aria-hidden />
+                    <span>Your desk (Party A)</span>
                   </label>
                   <button
                     type="button"
                     onClick={() => toggleMockEquity("A")}
-                    className="inline-flex items-center gap-1 font-mono text-[11px] text-foreground hover:underline"
+                    className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-0.5 font-mono text-[11px] text-foreground hover:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <Plus className="h-3 w-3" />
+                    <Plus className="h-3 w-3" aria-hidden />
                     {bookA.legs.some((l) => l.instrument.includes("tAAPL"))
                       ? "Remove tAAPL"
-                      : "Add tAAPL ($55k Long)"}
+                      : "Add tAAPL ($55k long)"}
                   </button>
                 </div>
                 <input
@@ -383,32 +396,32 @@ export default function ClearPage() {
                   type="text"
                   value={walletAInput}
                   onChange={(e) => setWalletAInput(e.target.value)}
-                  placeholder="Base58 address — 32–44 chars"
+                  placeholder="Paste a Solana address (demo address preloaded)"
                   autoComplete="off"
                   spellCheck={false}
-                  className={`mt-2 h-10 w-full rounded-md border bg-background px-3 font-mono text-xs transition-colors duration-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
-                    errorA ? "border-red-500" : "border-border"
+                  className={`mt-2 h-10 w-full rounded-md border bg-background px-3 font-mono text-xs transition-colors duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    errorA ? "border-destructive" : "border-border"
                   }`}
                   aria-invalid={!!errorA}
                 />
-                {errorA && <p className="mt-1.5 text-xs text-red-400">{errorA}</p>}
+                {errorA && <p className="mt-1.5 text-xs text-destructive">{errorA}</p>}
               </div>
 
               <div className="rounded-xl border border-border bg-card p-4">
                 <div className="flex items-center justify-between">
                   <label htmlFor="wallet-b" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-blue-400" />
-                    <span>Party B (Counterparty Desk)</span>
+                    <span className="h-2 w-2 rounded-full bg-blue-400" aria-hidden />
+                    <span>Counterparty desk (Party B)</span>
                   </label>
                   <button
                     type="button"
                     onClick={() => toggleMockEquity("B")}
-                    className="inline-flex items-center gap-1 font-mono text-[11px] text-foreground hover:underline"
+                    className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-0.5 font-mono text-[11px] text-foreground hover:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <Plus className="h-3 w-3" />
+                    <Plus className="h-3 w-3" aria-hidden />
                     {bookB.legs.some((l) => l.instrument.includes("tAAPL"))
                       ? "Remove tAAPL"
-                      : "Add tAAPL ($50k Short)"}
+                      : "Add tAAPL ($50k short)"}
                   </button>
                 </div>
                 <input
@@ -416,15 +429,15 @@ export default function ClearPage() {
                   type="text"
                   value={walletBInput}
                   onChange={(e) => setWalletBInput(e.target.value)}
-                  placeholder="Base58 address — 32–44 chars"
+                  placeholder="Paste a Solana address (demo address preloaded)"
                   autoComplete="off"
                   spellCheck={false}
-                  className={`mt-2 h-10 w-full rounded-md border bg-background px-3 font-mono text-xs transition-colors duration-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
-                    errorB ? "border-red-500" : "border-border"
+                  className={`mt-2 h-10 w-full rounded-md border bg-background px-3 font-mono text-xs transition-colors duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    errorB ? "border-destructive" : "border-border"
                   }`}
                   aria-invalid={!!errorB}
                 />
-                {errorB && <p className="mt-1.5 text-xs text-red-400">{errorB}</p>}
+                {errorB && <p className="mt-1.5 text-xs text-destructive">{errorB}</p>}
               </div>
             </div>
 
@@ -432,14 +445,14 @@ export default function ClearPage() {
               <button
                 type="button"
                 onClick={applyWallets}
-                className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-secondary px-4 text-xs font-medium text-foreground "
+                className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-secondary px-4 text-xs font-medium text-foreground transition-colors hover:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Wallet className="h-3.5 w-3.5" aria-hidden />
-                <span>Save Wallets</span>
+                <span>Save wallets</span>
               </button>
               <WalletConnect
                 variant="block"
-                label="Connect Phantom / Metamask"
+                label="Connect Phantom / MetaMask"
                 onConnect={connectPartyA}
                 onDisconnect={disconnectPartyA}
               />
@@ -447,11 +460,11 @@ export default function ClearPage() {
                 type="button"
                 disabled={busy}
                 onClick={compute}
-                className="ml-auto inline-flex h-12 items-center gap-2 rounded-full bg-primary px-8 text-sm font-bold text-primary-foreground transition-colors duration-150 disabled:opacity-50"
+                className="btn-press ml-auto inline-flex h-12 items-center gap-2 rounded-full bg-primary px-8 text-sm font-bold text-primary-foreground disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
                 <Lock className="h-4 w-4" aria-hidden />
-                <span>Execute Step 3: Run Confidential Netting</span>
-                <ArrowRight className="h-4 w-4" />
+                <span>{phase === "setup" && busy ? "Computing…" : "Run confidential netting"}</span>
+                <ArrowRight className="h-4 w-4" aria-hidden />
               </button>
             </div>
           </section>
@@ -464,10 +477,10 @@ export default function ClearPage() {
             <div className="flex items-center justify-between">
               <p className="flex items-center gap-2 text-sm font-bold text-foreground">
                 <Lock className="h-4 w-4 text-foreground" aria-hidden />
-                Running Confidential Compute Enclave
+                Working in the dark — neither book is readable
               </p>
               <span className="rounded-full border border-border bg-secondary px-3 py-1 font-mono text-xs uppercase text-foreground">
-                {backend === "arcium" ? "Arcium MXE Circuit" : backend === "enclave" ? "AWS Nitro TEE" : "Simulated Local"}
+                {backend === "arcium" ? "Arcium MXE circuit" : backend === "enclave" ? "AWS Nitro TEE" : "Local simulation"}
               </span>
             </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-secondary" aria-hidden>
@@ -525,7 +538,7 @@ export default function ClearPage() {
                       Attestation: {apiAttestation.slice(0, 24)}...
                     </span>
                   )}
-                  <span className="text-success">🔒 Zero Counterparty Legs Leaked</span>
+                  <span className="text-success">Zero counterparty legs leaked</span>
                 </div>
               </div>
             )}
@@ -536,12 +549,12 @@ export default function ClearPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4 text-xs">
           <div className="flex items-center gap-2">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75 motion-reduce:animate-none" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
             </span>
-            <span className="text-foreground font-medium">Pyth Hermes Network Oracles:</span>
+            <span className="text-foreground font-medium">Live oracle prices:</span>
             <span className="font-mono text-muted-foreground">
-              {oracleSyncMessage || "Feeds active for SOL, BTC, ETH, bAAPL, MON, USDC"}
+              {oracleSyncMessage || "Pyth feeds active for SOL, BTC, ETH, bAAPL, MON, USDC"}
             </span>
           </div>
 
@@ -549,9 +562,9 @@ export default function ClearPage() {
             type="button"
             disabled={oracleSyncing}
             onClick={refreshOraclePrices}
-            className="rounded-full border border-border bg-secondary px-4 py-1.5 font-mono text-xs text-foreground hover:border-foreground transition-colors disabled:opacity-50"
+            className="rounded-full border border-border bg-secondary px-4 py-1.5 font-mono text-xs text-foreground hover:border-foreground transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {oracleSyncing ? "Fetching Pyth Feeds..." : "⚡ Sync Live Oracle Prices"}
+            {oracleSyncing ? "Fetching feeds…" : "Refresh oracle prices"}
           </button>
         </div>
 
@@ -579,10 +592,10 @@ export default function ClearPage() {
             <button
               type="button"
               onClick={reset}
-              className="inline-flex h-11 items-center gap-2 rounded-full border border-border bg-card px-6 text-sm font-medium text-foreground transition-colors hover:bg-secondary "
+              className="inline-flex h-11 items-center gap-2 rounded-full border border-border bg-card px-6 text-sm font-medium text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <RotateCcw className="h-4 w-4" aria-hidden />
-              <span>Start New Bilateral Session</span>
+              <span>Start a new session</span>
             </button>
           </section>
         )}

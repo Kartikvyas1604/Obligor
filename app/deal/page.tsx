@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Users, Plus, ShieldCheck, Cpu, ArrowRight, Sparkles, Layers, Wallet } from "lucide-react";
+import { Users, ArrowRight } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { WalletConnect } from "@/components/wallet-connect";
 import { solanaPartyA } from "@/lib/fixtures";
@@ -43,14 +43,15 @@ export default function DealLauncherPage() {
         {/* Header */}
         <div className="text-center space-y-3">
           <div className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-foreground">
-            <Users className="h-4 w-4" />
-            <span>P2P Confidential Clearing</span>
+            <Users className="h-4 w-4" aria-hidden />
+            <span>Partner clearing</span>
           </div>
           <h1 className="text-3xl sm:text-5xl font-extrabold text-foreground tracking-tight">
-            Create a Live Bilateral Deal Room
+            Start a private deal room
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground max-w-xl mx-auto">
-            Initiate a private, cryptographically sealed session. Invite an institutional counterparty to clear offsetting positions without leaking trading books.
+            Create a private session, invite your counterparty with a link, and net your offsetting
+            positions together — neither side can read the other&rsquo;s book.
           </p>
         </div>
 
@@ -58,52 +59,71 @@ export default function DealLauncherPage() {
         <div className="rounded-[28px] border border-border bg-card p-6 sm:p-10 space-y-6 shadow-2xl">
           {/* Desk Label */}
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-muted-foreground">Your Desk Name</label>
+            <label htmlFor="desk-label" className="text-xs font-semibold text-muted-foreground">
+              Your desk name
+            </label>
             <input
+              id="desk-label"
+              name="desk-label"
               type="text"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder="e.g. Wintermute Desk Alpha"
-              className="w-full h-11 rounded-xl border border-border bg-secondary px-4 font-mono text-sm text-foreground focus-visible:outline-none focus-visible:border-foreground"
+              autoComplete="organization"
+              className="w-full h-11 rounded-xl border border-border bg-secondary px-4 font-mono text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
 
           {/* Wallet Address */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-muted-foreground">Your Wallet Address</label>
+              <label htmlFor="desk-wallet" className="text-xs font-semibold text-muted-foreground">
+                Your wallet address
+              </label>
               <WalletConnect onConnect={(addr) => setWallet(addr)} />
             </div>
             <input
+              id="desk-wallet"
+              name="desk-wallet"
               type="text"
+              inputMode="text"
               value={wallet}
               onChange={(e) => setWallet(e.target.value)}
-              placeholder="Base58 / EVM Address"
-              className="w-full h-11 rounded-xl border border-border bg-secondary px-4 font-mono text-xs text-foreground focus-visible:outline-none focus-visible:border-foreground"
+              placeholder="Solana or EVM address (a demo address is preloaded)"
+              autoComplete="off"
+              spellCheck={false}
+              className="w-full h-11 rounded-xl border border-border bg-secondary px-4 font-mono text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-describedby="desk-wallet-help"
             />
+            <p id="desk-wallet-help" className="text-[11px] text-muted-foreground">
+              Read-only — we never move funds from this wallet.
+            </p>
           </div>
 
           {/* Confidential Engine Selection */}
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-muted-foreground">Confidential Clearing Engine</label>
+          <fieldset className="space-y-2">
+            <legend className="text-xs font-semibold text-muted-foreground">
+              How should the math run?
+            </legend>
             <div className="grid sm:grid-cols-2 gap-3">
               {[
                 {
                   id: "arcium",
-                  title: "Arcium MPC (Solana)",
-                  desc: "Multi-party cryptographic circuit. Zero single point of failure.",
+                  title: "MPC (Solana) — strongest",
+                  desc: "Both books stay encrypted end-to-end. Not even a single operator can read them.",
                 },
                 {
                   id: "enclave",
-                  title: "Nitro TEE (Monad)",
-                  desc: "Hardware-isolated enclave with verifiable PCR0 attestation.",
+                  title: "Hardware enclave (Monad)",
+                  desc: "Books are sealed inside a hardware-locked box with a verifiable receipt (attestation).",
                 },
               ].map((b) => (
                 <button
                   type="button"
                   key={b.id}
                   onClick={() => setBackend(b.id as BackendKind)}
-                  className={`flex flex-col text-left p-4 rounded-xl border text-xs transition-all ${
+                  aria-pressed={backend === b.id}
+                  className={`flex flex-col text-left p-4 rounded-xl border text-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                     backend === b.id
                       ? "border-foreground bg-secondary text-foreground shadow-sm"
                       : "border-border bg-secondary text-muted-foreground hover:text-foreground"
@@ -114,21 +134,21 @@ export default function DealLauncherPage() {
                 </button>
               ))}
             </div>
-          </div>
+          </fieldset>
 
           {/* Launch Button */}
           <button
             type="button"
             disabled={creating}
             onClick={handleCreateSession}
-            className="w-full flex items-center justify-center gap-2 rounded-full bg-primary py-4 font-bold text-primary-foreground text-sm transition-all disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 rounded-full bg-primary py-4 font-bold text-primary-foreground text-sm transition-all disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             {creating ? (
-              <span>Initializing Real-Time Session...</span>
+              <span>Creating your room…</span>
             ) : (
               <>
-                <span>Launch Deal Room &amp; Invite Counterparty</span>
-                <ArrowRight className="h-4 w-4" />
+                <span>Create room &amp; get invite link</span>
+                <ArrowRight className="h-4 w-4" aria-hidden />
               </>
             )}
           </button>

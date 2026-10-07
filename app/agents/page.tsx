@@ -14,7 +14,7 @@ const AGENT_A_MOCK_LINES: Line[] = [
   { text: "→ generating cryptographic payment signature: x402_sig_sol_...a_valid", cls: "t-muted" },
   { text: "→ paying 10,000 base units ($0.01 USDC)", cls: "t-muted" },
   { text: "← 200 OK · siloedA: $26,750 · nettedCombined: $24,500 · savings: $22,000", cls: "t-ok" },
-  { text: "🔒 PRIVACY INVARIANT: Counterparty legs omitted from response", cls: "t-muted" },
+  { text: "PRIVACY INVARIANT: Counterparty legs omitted from response", cls: "t-muted" },
 ];
 
 const AGENT_B_MOCK_LINES: Line[] = [
@@ -25,7 +25,7 @@ const AGENT_B_MOCK_LINES: Line[] = [
   { text: "→ signing payment authorization with Agent B secret key", cls: "t-muted" },
   { text: "→ paying 10,000 base units ($0.01 USDC)", cls: "t-muted" },
   { text: "← 200 OK · siloedB: $19,750 · nettedCombined: $24,500 · backend: arcium", cls: "t-ok" },
-  { text: "🔒 PRIVACY INVARIANT: Desk Alpha legs omitted from response", cls: "t-muted" },
+  { text: "PRIVACY INVARIANT: Desk Alpha legs omitted from response", cls: "t-muted" },
 ];
 
 const AGENT_MONAD_LINES: Line[] = [
@@ -37,7 +37,7 @@ const AGENT_MONAD_LINES: Line[] = [
   { text: "  • Desk C ↔ D (MON): Siloed $18,250 → Netted $11,250 (Freed $7,000)", cls: "t-muted" },
   { text: "  • Desk E ↔ F (ETH): Siloed $14,700 → Netted $8,700 (Freed $6,000)", cls: "t-muted" },
   { text: "  • Desk G ↔ H (tAAPL): Siloed $22,500 → Netted $11,250 (Freed $11,250)", cls: "t-muted" },
-  { text: "⚡ Monad parallel clearing throughput verified", cls: "t-ok" },
+  { text: "Monad parallel clearing throughput verified", cls: "t-ok" },
 ];
 
 function AgentTerminal({
@@ -105,7 +105,7 @@ function AgentTerminal({
                 cls: "t-ok",
               },
               {
-                text: `🔒 Privacy: ${data.bookSummary?.venues?.length || 0} venues aggregate · Legs strictly omitted`,
+                text: `Privacy: ${data.bookSummary?.venues?.length || 0} venues aggregated · legs strictly omitted`,
                 cls: "t-muted",
               },
             ]);
@@ -200,17 +200,49 @@ export default function AgentsPage() {
       <div className="flex flex-col gap-10">
         <div>
           <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-            Machine-payable clearing · x402 V2 Protocol
+            Agent payments · x402
           </p>
           <h1 className="mt-2 text-3xl font-medium tracking-tight md:text-4xl">
-            Two Independent Agents, Machine-Payable Clearing
+            Let agents clear for you
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Party A and Party B each call the gated clearing API with separate disposable keys. Unpaid
-            requests receive HTTP <code className="text-foreground">402 PAYMENT-REQUIRED</code>; a signed
-            micropayment unlocks the confidential net margin without revealing either book.
+            Obligor&rsquo;s clearing API is machine-payable: two independent agents call it with
+            their own disposable keys and pay $0.01 per call. No accounts, no API keys.
           </p>
         </div>
+
+        {/* Beginner explainer: how agent payment works */}
+        <section aria-label="How agent payment works" className="rounded-xl border border-border bg-card p-6">
+          <h2 className="text-base font-medium">How agent payment works</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Three steps, no accounts. Everything below runs live against this API.
+          </p>
+          <ol className="mt-5 grid gap-4 md:grid-cols-3">
+            {[
+              {
+                n: "1",
+                title: "Agent asks for a quote",
+                body: "The API answers with a bill: $0.01, payable on devnet USDC. Nothing leaks — not yet, not ever.",
+              },
+              {
+                n: "2",
+                title: "Agent signs the payment",
+                body: "The agent's disposable key signs a micropayment — one individual transaction, capped at $0.01.",
+              },
+              {
+                n: "3",
+                title: "API clears and answers",
+                body: "Once paid, the confidential net margin comes back. Only the combined number — never either book.",
+              },
+            ].map((s) => (
+              <li key={s.n} className="rounded-lg border border-border bg-secondary/40 p-4">
+                <span className="font-mono text-xs text-muted-foreground">{s.n}</span>
+                <p className="mt-1.5 text-sm font-semibold">{s.title}</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{s.body}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
 
         <div className="grid gap-6 lg:grid-cols-2">
           <AgentTerminal
@@ -230,9 +262,9 @@ export default function AgentsPage() {
         </div>
 
         <div className="mt-2">
-          <h2 className="text-xl font-medium tracking-tight">Monad Multi-Pair Epoch Agent</h2>
+          <h2 className="text-xl font-medium tracking-tight">Monad multi-pair epoch agent</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Simultaneous multi-pair batch execution over Monad under hardware-attested TEE.
+            Clears three desk pairs simultaneously under hardware-attested encryption (TEE).
           </p>
           <div className="mt-4">
             <AgentTerminal
@@ -245,8 +277,11 @@ export default function AgentsPage() {
           </div>
         </div>
 
-        <section aria-label="x402 Protocol Spec" className="rounded-xl border border-border bg-card p-6">
-          <h3 className="text-sm font-medium">x402 V2 Specification &amp; Payment Headers</h3>
+        <details className="rounded-xl border border-border bg-card p-6">
+          <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            x402 protocol details
+            <span className="ml-2 font-mono text-xs text-muted-foreground">networks, assets, headers</span>
+          </summary>
           <div className="mt-4 grid gap-4 md:grid-cols-2 font-mono text-xs text-muted-foreground">
             <div className="rounded border border-border/80 bg-background/50 p-3">
               <p className="font-medium text-foreground">Solana Devnet x402</p>
@@ -263,7 +298,7 @@ export default function AgentsPage() {
               <p>Facilitator: https://x402-facilitator.molandak.org</p>
             </div>
           </div>
-        </section>
+        </details>
       </div>
     </PageShell>
   );

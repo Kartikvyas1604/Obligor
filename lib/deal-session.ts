@@ -1,4 +1,4 @@
-import { type PositionBook, type PositionLeg, type NetMarginResult, twoPartyNetted, twoPartySiloed, type BackendKind } from "@/lib/margin";
+import { type PositionBook, type PositionLeg, type NetMarginResult, twoPartySiloed, type BackendKind } from "@/lib/margin";
 import { getConfidentialBackend } from "@/lib/confidential";
 
 export type SessionStatus =

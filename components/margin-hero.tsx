@@ -5,6 +5,7 @@ import { ArrowRight, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { usd, type NetMarginResult } from "@/lib/margin";
 import { useCountUp } from "@/hooks/use-count-up";
+import { MarginDonut } from "@/components/charts";
 
 function Bar({ target, tone, delay = 0 }: { target: number; tone: "primary" | "success" | "muted"; delay?: number }) {
   const [w, setW] = useState(0);
@@ -51,8 +52,8 @@ export function MarginHero({
       aria-label="Two-party margin result"
       className="anim-fade-up rounded-xl border border-primary/40 bg-card p-6 md:p-8"
     >
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-col gap-6 md:flex-row md:items-center md:gap-10">
+        <div className="min-w-0 flex-1">
           <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
             Combined net margin
           </p>
@@ -67,13 +68,30 @@ export function MarginHero({
           <p className="mt-1 font-mono text-xs text-muted-foreground tabular-nums">
             net exposure {usd(Math.abs(result.netExposureUsd))}
           </p>
+          <div className="mt-5 max-w-sm text-right md:text-left">
+            <p className="text-xs text-muted-foreground">Capital freed by netting</p>
+            <p className="mt-1 font-mono text-2xl font-medium tabular-nums text-success">
+              {usd(savingsValue)}
+            </p>
+            <p className="font-mono text-xs tabular-nums text-success">{pct}% vs siloed</p>
+          </div>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-muted-foreground">Capital freed</p>
-          <p className="mt-1 font-mono text-2xl font-medium tabular-nums text-success">
-            {usd(savingsValue)}
-          </p>
-          <p className="font-mono text-xs tabular-nums text-success">{pct}% vs siloed</p>
+        <div className="flex flex-col items-center gap-3 self-center">
+          <MarginDonut
+            siloedCombined={result.siloedCombinedUsd}
+            netted={result.nettedCombinedUsd}
+            savings={result.savingsUsd}
+          />
+          <div className="flex items-center gap-4 font-mono text-[11px] text-muted-foreground" aria-hidden>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-success" />
+              freed
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-foreground" />
+              kept
+            </span>
+          </div>
         </div>
       </div>
 

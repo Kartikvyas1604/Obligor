@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Check, Copy, EyeOff, Trash2, Plus } from "lucide-react";
 import { siloedIm, usd, type PositionBook, type PositionLeg } from "@/lib/margin";
+import { ExposureBars } from "@/components/charts";
 
 function truncateAddress(address: string, chars = 4) {
   if (address.length <= chars * 2 + 3) return address;
@@ -97,9 +98,10 @@ function LegRow({
             type="button"
             onClick={onDelete}
             title="Delete this leg"
-            className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors"
+            aria-label={`Remove ${leg.instrument} position`}
+            className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash2 className="h-3.5 w-3.5" aria-hidden />
           </button>
         )}
       </div>
@@ -156,47 +158,50 @@ export function BookColumn({
               <button
                 type="button"
                 onClick={onOpenAddModal}
-                className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-0.5 text-xs text-foreground hover:bg-secondary font-sans"
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-0.5 text-xs text-foreground hover:bg-secondary font-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <Plus className="h-3 w-3" />
-                <span>Add Leg</span>
+                <Plus className="h-3 w-3" aria-hidden />
+                <span>Add position</span>
               </button>
             )}
           </div>
         </div>
         {legs.length === 0 ? (
           <div className="px-4 py-10 text-center space-y-2">
-            <p className="text-sm font-medium text-foreground">No active legs in book</p>
+            <p className="text-sm font-medium text-foreground">No positions yet</p>
             <p className="text-xs text-muted-foreground">
-              Click &quot;Add Leg&quot; or select a quick scenario above.
+              Add a leg, or pick a quick scenario above.
             </p>
             {onOpenAddModal && (
               <button
                 type="button"
                 onClick={onOpenAddModal}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary px-4 py-1.5 text-xs text-foreground hover:border-foreground"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary px-4 py-1.5 text-xs text-foreground hover:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Create Custom Position Leg</span>
+                <Plus className="h-3.5 w-3.5" aria-hidden />
+                <span>Add a position</span>
               </button>
             )}
           </div>
         ) : (
-          <ul>
-            {legs.map((l, i) => (
-              <LegRow
-                key={`${l.party}-${l.venue}-${l.instrument}-${i}`}
-                leg={l}
-                index={i}
-                onDelete={onDeleteLeg ? () => onDeleteLeg(i) : undefined}
-              />
-            ))}
-          </ul>
+          <div>
+            <ExposureBars legs={legs} />
+            <ul className="border-t border-border">
+              {legs.map((l, i) => (
+                <LegRow
+                  key={`${l.party}-${l.venue}-${l.instrument}-${i}`}
+                  leg={l}
+                  index={i}
+                  onDelete={onDeleteLeg ? () => onDeleteLeg(i) : undefined}
+                />
+              ))}
+            </ul>
+          </div>
         )}
       </div>
 
       <div className="flex items-baseline justify-between border-t border-border bg-card px-4 py-3 transition-colors duration-150">
-        <p className="text-xs text-muted-foreground">Siloed initial margin requirement</p>
+        <p className="text-xs text-muted-foreground">Margin you hold alone (siloed)</p>
         <p className="font-mono text-sm font-bold text-foreground tabular-nums">{usd(im)}</p>
       </div>
     </div>
