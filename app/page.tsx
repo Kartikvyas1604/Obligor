@@ -1,319 +1,292 @@
 import Link from "next/link";
-import {
-  ArrowRight,
-  ArrowUpRight,
-  ShieldCheck,
-  EyeOff,
-  Zap,
-  Lock,
-  Cpu,
-  Coins,
-  CheckCircle2,
-} from "lucide-react";
+import { Check, ArrowRight } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { HeroMockup } from "@/components/hero-mockup";
 import { ProfitCalculator } from "@/components/profit-calculator";
 import { HowItWorksVisual } from "@/components/how-it-works-visual";
+import { StatsBand, FaqSection, CtaBand } from "@/components/landing-sections";
+import { RevealSection } from "@/components/reveal-section";
+import { Marquee } from "@/components/marquee";
+import { Sparkle } from "@/components/sparkle";
+import { SealVisual, NetVisual, EscrowVisual } from "@/components/three-ways-visuals";
+
+const THREE_WAYS = [
+  {
+    index: "01",
+    title: "Seal both books",
+    body: "Each desk submits its portfolio encrypted, from its own device, with independent keys. Plaintext legs never touch the wire.",
+    visual: <SealVisual />,
+  },
+  {
+    index: "02",
+    title: "Net in the dark",
+    body: "Arcium MPC on Solana or an attested TEE on Monad computes a single scalar: the combined net initial margin.",
+    visual: <NetVisual />,
+  },
+  {
+    index: "03",
+    title: "Free the collateral",
+    body: "On-chain escrow settles the net obligation. Excess capital returns to both desks the moment the attestation lands.",
+    visual: <EscrowVisual />,
+  },
+];
+
+const COMPARISON = {
+  siloed: [
+    "Duplicate collateral on every venue",
+    "Cross-party offsets never recognized",
+    "A central operator can read both books",
+    "No machine-payable interface",
+  ],
+  obligor: [
+    "One net obligation across both desks",
+    "Offsetting positions cancel cryptographically",
+    "Only the aggregate is ever decrypted",
+    "$0.01 per call via x402",
+  ],
+};
+
+const TICKER = [
+  "Confidential netting",
+  "Arcium MPC",
+  "Attested TEE",
+  "Pyth oracles",
+  "x402 settlement",
+  "TEE ≠ MPC",
+  "Zero plaintext leaks",
+  "On-chain escrow",
+];
+
+const INTEGRATIONS = ["Kamino", "Drift", "Pyth", "xStocks", "Arcium", "Monad"];
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-[#000000] text-white flex flex-col font-['Plus_Jakarta_Sans',sans-serif] selection:bg-[#C59A3F]/30 selection:text-[#E8C874]">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       <SiteHeader />
 
       <main className="flex-1">
-        {/* ========================================================================= */}
-        {/* HERO SECTION                                                               */}
-        {/* ========================================================================= */}
-        <section className="relative overflow-hidden border-b border-[#1F1F1F] pt-12 pb-24 md:pt-20 md:pb-32">
-          {/* Subtle Golden Radial Glow in Background */}
+        <section className="relative overflow-hidden border-b border-border">
           <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 -top-40 h-[600px] bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,rgba(197,154,63,0.12),transparent_70%)]"
+            aria-hidden
+            className="grid-backdrop pointer-events-none absolute inset-0 opacity-50"
           />
-
-          <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="grid items-center gap-12 lg:grid-cols-12 lg:gap-16">
-              {/* Hero Left Content */}
-              <div className="lg:col-span-6 xl:col-span-6 space-y-8 text-left">
-                {/* Live Protocol Status Pill */}
-                <div className="inline-flex items-center gap-2.5 rounded-full border border-[#1F1F1F] bg-[#0A0A0A] px-4 py-1.5 shadow-sm">
-                  <span className="relative flex h-2 w-2" aria-hidden="true">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#E8C874] opacity-75" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-[#C59A3F]" />
-                  </span>
-                  <span className="font-['JetBrains_Mono',monospace] text-xs uppercase tracking-wider text-[#94A3B8]">
-                    Confidential Two-Party Clearing
-                  </span>
-                </div>
-
-                {/* H1 Headline */}
-                <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-6xl md:text-7xl leading-[1.05]">
-                  Precision execution.{" "}
-                  <span className="block bg-gradient-to-r from-[#E8C874] via-[#C59A3F] to-[#A67C27] bg-clip-text text-transparent">
-                    Golden standard.
-                  </span>
-                </h1>
-
-                {/* Subheadline */}
-                <p className="max-w-xl text-lg font-normal leading-relaxed text-[#94A3B8] sm:text-xl">
-                  Institutional-grade clearing and yield execution, enforced by code. Two desks,
-                  one net initial margin — neither party sees the other&rsquo;s book.
-                </p>
-
-                {/* CTA Buttons */}
-                <div className="flex flex-wrap items-center gap-4 pt-2">
-                  {/* Primary CTA Button: Fully Pill-Shaped with Gold Glow */}
-                  <Link
-                    href="/clear"
-                    className="group inline-flex h-14 items-center justify-center gap-3 rounded-full bg-gradient-to-r from-[#E8C874] via-[#C59A3F] to-[#A67C27] px-8 text-base font-semibold text-black transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-[0_4px_25px_rgba(197,154,63,0.25)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8C874]"
-                  >
-                    <span>Launch Clearing Terminal</span>
-                    <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
-                  </Link>
-
-                  {/* Secondary CTA Button */}
-                  <Link
-                    href="/trust"
-                    className="inline-flex h-14 items-center justify-center gap-2 rounded-full border border-[#1F1F1F] bg-[#0A0A0A] px-7 text-base font-medium text-white transition-all duration-200 hover:border-[#4A3D25] hover:bg-[#141414] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C59A3F]"
-                  >
-                    <span>Trust &amp; Honesty Matrix</span>
-                  </Link>
-                </div>
-
-                {/* Micro Meta Features */}
-                <div className="pt-2 flex flex-wrap items-center gap-6 text-xs font-['JetBrains_Mono',monospace] text-[#94A3B8]">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-[#C59A3F]" />
-                    <span>Arcium MPC (Solana)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-[#C59A3F]" />
-                    <span>Attested TEE (Monad)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-[#C59A3F]" />
-                    <span>x402 V2 Settlement</span>
-                  </div>
-                </div>
+          <div className="relative mx-auto grid max-w-[1332px] items-center gap-12 px-4 pb-20 pt-14 sm:px-6 md:pt-20 lg:grid-cols-2 lg:gap-16 lg:px-8">
+            <div className="text-left">
+              <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-[13px] font-medium tracking-[-0.01em] text-muted-foreground">
+                <Sparkle size={12} className="text-gold" />
+                Confidential two-party clearing
               </div>
 
-              {/* Hero Right Visual: Floating Institutional Mockup */}
-              <div className="lg:col-span-6 xl:col-span-6">
-                <HeroMockup />
-              </div>
-            </div>
-          </div>
-        </section>
+              <h1 className="mt-8 text-[42px] font-medium leading-[108%] tracking-[-0.03em] sm:text-6xl">
+                Your margin should
+                <br />
+                never{" "}
+                <span className="text-muted-foreground">sit trapped.</span>
+              </h1>
 
-        {/* ========================================================================= */}
-        {/* INTERACTIVE PROFIT & CAPITAL CALCULATOR                                    */}
-        {/* ========================================================================= */}
-        <section className="border-b border-[#1F1F1F] bg-[#000000] py-16 sm:py-24">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <ProfitCalculator />
-          </div>
-        </section>
-
-        {/* ========================================================================= */}
-        {/* 3-STEP VISUAL STORYBOARD                                                  */}
-        {/* ========================================================================= */}
-        <section className="border-b border-[#1F1F1F] bg-[#050505] py-16 sm:py-24">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <HowItWorksVisual />
-          </div>
-        </section>
-
-        {/* ========================================================================= */}
-        {/* CORE VALUE PILLARS                                                        */}
-        {/* ========================================================================= */}
-        <section className="border-b border-[#1F1F1F] bg-[#000000] py-20 lg:py-28">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="max-w-2xl space-y-3">
-              <span className="font-['JetBrains_Mono',monospace] text-xs uppercase tracking-widest text-[#C59A3F]">
-                Institutional Architecture
-              </span>
-              <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-                Engineered for mutually distrusting desks
-              </h2>
-              <p className="text-base leading-relaxed text-[#94A3B8]">
-                Siloed protocols demand duplicate collateral. Centralized clearing exposes strategies.
-                Obligor computes net portfolio obligations without revealing plaintext books.
+              <p className="mt-6 max-w-md text-[17px] font-medium leading-[148%] tracking-[-0.02em] text-muted-foreground">
+                Obligor nets two desks&rsquo; portfolios into one confidential obligation —
+                neither party, nor the operator, ever sees the other&rsquo;s book.
               </p>
-            </div>
 
-            <div className="mt-12 grid gap-6 md:grid-cols-3">
-              {/* Pillar 1 */}
-              <div className="group rounded-[24px] border border-[#1F1F1F] bg-[#0A0A0A] p-8 transition-all duration-300 hover:border-[#C59A3F]/40 hover:shadow-[0_10px_30px_rgba(197,154,63,0.06)]">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#1F1F1F] bg-[#141414] text-[#E8C874] transition-colors group-hover:border-[#C59A3F]/50 group-hover:bg-[#C59A3F]/10">
-                  <EyeOff className="h-6 w-6" />
-                </div>
-                <h3 className="mt-6 text-xl font-bold text-white">Sealed Input Confidentiality</h3>
-                <p className="mt-3 text-sm leading-relaxed text-[#94A3B8]">
-                  Both trading desks submit encrypted positions. The computation outputs a single scalar:
-                  combined net initial margin. Neither counterparty nor operator ever sees individual legs.
-                </p>
-                <div className="mt-6 inline-flex items-center gap-1.5 font-['JetBrains_Mono',monospace] text-xs text-[#C59A3F]">
-                  <span>Cryptographic MPC on Solana</span>
-                </div>
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                <Link
+                  href="/clear"
+                  className="btn-light inline-flex h-12 items-center gap-2 rounded-full px-7 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                >
+                  <span>Launch clearing terminal</span>
+                  <ArrowRight className="h-4 w-4" aria-hidden />
+                </Link>
+                <Link
+                  href="#how-it-works"
+                  className="inline-flex h-12 items-center rounded-full border border-border px-7 text-sm font-semibold transition-colors duration-200 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                >
+                  <span>See how it works</span>
+                </Link>
               </div>
 
-              {/* Pillar 2 */}
-              <div className="group rounded-[24px] border border-[#1F1F1F] bg-[#0A0A0A] p-8 transition-all duration-300 hover:border-[#C59A3F]/40 hover:shadow-[0_10px_30px_rgba(197,154,63,0.06)]">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#1F1F1F] bg-[#141414] text-[#E8C874] transition-colors group-hover:border-[#C59A3F]/50 group-hover:bg-[#C59A3F]/10">
-                  <ShieldCheck className="h-6 w-6" />
-                </div>
-                <h3 className="mt-6 text-xl font-bold text-white">Pluggable Trust Transports</h3>
-                <p className="mt-3 text-sm leading-relaxed text-[#94A3B8]">
-                  Arcium MPC on Solana for multi-party cryptographic privacy; AWS Nitro Enclaves on
-                  Monad for high-throughput hardware-attested clearing. Pure honesty: TEE &ne; MPC.
-                </p>
-                <div className="mt-6 inline-flex items-center gap-1.5 font-['JetBrains_Mono',monospace] text-xs text-[#C59A3F]">
-                  <span>Labeled Trust Models</span>
-                </div>
-              </div>
-
-              {/* Pillar 3 */}
-              <div className="group rounded-[24px] border border-[#1F1F1F] bg-[#0A0A0A] p-8 transition-all duration-300 hover:border-[#C59A3F]/40 hover:shadow-[0_10px_30px_rgba(197,154,63,0.06)]">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#1F1F1F] bg-[#141414] text-[#E8C874] transition-colors group-hover:border-[#C59A3F]/50 group-hover:bg-[#C59A3F]/10">
-                  <Zap className="h-6 w-6" />
-                </div>
-                <h3 className="mt-6 text-xl font-bold text-white">Machine-Payable x402 V2</h3>
-                <p className="mt-3 text-sm leading-relaxed text-[#94A3B8]">
-                  Autonomous agents query quotes and pay $0.01 in devnet USDC directly via x402 HTTP
-                  headers with disposable keys. No accounts, zero operator custody.
-                </p>
-                <div className="mt-6 inline-flex items-center gap-1.5 font-['JetBrains_Mono',monospace] text-xs text-[#C59A3F]">
-                  <span>$0.01 per Call Developer Wedge</span>
-                </div>
+              <div className="mt-10 flex flex-wrap items-center gap-x-2 gap-y-2 text-[13px] font-medium tracking-[-0.01em] text-muted-foreground">
+                <span className="text-foreground">Backed by live rails:</span>
+                {INTEGRATIONS.map((name) => (
+                  <span key={name}>{name}</span>
+                ))}
               </div>
             </div>
+
+            <div className="relative">
+              <HeroMockup />
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-[radial-gradient(88%_100%_at_50%_0%,transparent_55%,var(--background)_95%)]"
+              />
+            </div>
+          </div>
+
+          <div className="relative border-t border-border py-5">
+            <Marquee duration={30}>
+              {TICKER.map((item) => (
+                <span
+                  key={item}
+                  className="flex items-center gap-8 text-[13px] font-medium uppercase tracking-[-0.01em] text-muted-foreground"
+                >
+                  {item}
+                  <span className="h-1 w-1 rounded-full bg-border" aria-hidden />
+                </span>
+              ))}
+            </Marquee>
           </div>
         </section>
 
-        {/* ========================================================================= */}
-        {/* FOUR-MINUTE JUDGE WALKTHROUGH                                             */}
-        {/* ========================================================================= */}
-        <section className="border-b border-[#1F1F1F] bg-[#000000] py-20 lg:py-28">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="flex flex-wrap items-end justify-between gap-6">
-              <div>
-                <span className="font-['JetBrains_Mono',monospace] text-xs uppercase tracking-widest text-[#C59A3F]">
-                  Demo Flow
+        <StatsBand />
+
+        <section
+          aria-labelledby="what-obligor-does"
+          className="border-b border-border py-20 md:py-28"
+        >
+          <div className="mx-auto max-w-[1332px] px-4 sm:px-6 lg:px-8">
+            <RevealSection>
+              <div className="max-w-xl text-left">
+                <span className="flex items-center gap-1.5 text-[13px] font-medium tracking-[-0.01em] text-muted-foreground">
+                  <Sparkle size={11} className="text-gold" />
+                  What Obligor does
                 </span>
-                <h2 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-                  The Four-Minute Judge Path
+                <h2
+                  id="what-obligor-does"
+                  className="mt-3 text-[32px] font-medium leading-[122%] tracking-[-0.03em] sm:text-4xl"
+                >
+                  Two books in.{" "}
+                  <span className="text-muted-foreground">One number out.</span>
                 </h2>
               </div>
-              <Link
-                href="/clear"
-                className="inline-flex items-center gap-2 font-medium text-[#E8C874] hover:underline"
-              >
-                <span>Start Interactive Flow</span>
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
+            </RevealSection>
 
-            <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {[
-                {
-                  step: "01",
-                  icon: Lock,
-                  title: "Two Sealed Books",
-                  desc: "Party A & Party B submit encrypted positions into a joint session.",
-                  href: "/clear",
-                  tag: "Session Setup",
-                },
-                {
-                  step: "02",
-                  icon: Cpu,
-                  title: "Confidential Compute",
-                  desc: "MPC / Attested TEE nets the books; only aggregate scalars decrypt out.",
-                  href: "/clear",
-                  tag: "Hero Margin",
-                },
-                {
-                  step: "03",
-                  icon: EyeOff,
-                  title: "The Dangerous Twin",
-                  desc: "Experience the plaintext counterfactual to see why centralized primes fail.",
-                  href: "/adversarial",
-                  tag: "Threat Analysis",
-                },
-                {
-                  step: "04",
-                  icon: Coins,
-                  title: "Autonomous Agents",
-                  desc: "Two independent agents execute 402 challenge → pay → 200 flow.",
-                  href: "/agents",
-                  tag: "x402 V2 API",
-                },
-              ].map(({ step, icon: Icon, title, desc, href, tag }) => (
-                <Link
-                  key={step}
-                  href={href}
-                  className="group relative flex flex-col justify-between rounded-[24px] border border-[#1F1F1F] bg-[#0A0A0A] p-6 transition-all duration-200 hover:-translate-y-1 hover:border-[#C59A3F]/50 hover:bg-[#121212]"
-                >
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="font-['JetBrains_Mono',monospace] text-xs font-bold text-[#C59A3F]">
-                        {step}
-                      </span>
-                      <span className="rounded-full bg-[#141414] px-2.5 py-0.5 font-['JetBrains_Mono',monospace] text-[10px] text-[#94A3B8]">
-                        {tag}
-                      </span>
+            <div className="mt-14 grid gap-4 md:grid-cols-3">
+              {THREE_WAYS.map(({ index, title, body, visual }) => (
+                <RevealSection key={index} delay={100}>
+                  <div className="engraved flex h-full flex-col rounded-3xl bg-card p-3 sm:p-4">
+                    <div className="flex items-center justify-between px-4 pt-3">
+                      <span className="font-mono text-xs text-muted-foreground">{index}</span>
                     </div>
-                    <div className="mt-6 flex h-10 w-10 items-center justify-center rounded-xl border border-[#1F1F1F] bg-[#000000] text-[#E8C874]">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <h3 className="mt-4 text-base font-bold text-white">{title}</h3>
-                    <p className="mt-2 text-xs leading-relaxed text-[#94A3B8]">{desc}</p>
+                    <h3 className="mt-4 px-4 text-xl font-medium leading-[122%] tracking-[-0.02em]">
+                      {title}
+                    </h3>
+                    <p className="mt-3 px-4 text-[15px] font-medium leading-[148%] tracking-[-0.01em] text-muted-foreground">
+                      {body}
+                    </p>
+                    <div className="mt-6 flex-1 px-4 pb-4">{visual}</div>
                   </div>
-                  <div className="mt-6 flex items-center gap-1.5 text-xs font-semibold text-[#E8C874] opacity-0 transition-opacity group-hover:opacity-100">
-                    <span>Open screen</span>
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                  </div>
-                </Link>
+                </RevealSection>
               ))}
             </div>
           </div>
         </section>
 
-        {/* ========================================================================= */}
-        {/* CALL TO ACTION                                                            */}
-        {/* ========================================================================= */}
-        <section className="bg-[#000000] py-20 lg:py-28">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="relative overflow-hidden rounded-[32px] border border-[#1F1F1F] bg-[#0A0A0A] p-10 md:p-16 text-center">
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(197,154,63,0.12),transparent_70%)]"
-              />
-              <div className="relative mx-auto max-w-2xl space-y-6">
-                <h2 className="text-3xl font-extrabold tracking-tight text-white sm:text-5xl">
-                  Ready to test confidential clearing?
+        <section
+          id="how-it-works"
+          aria-labelledby="how-it-works-heading"
+          className="border-b border-border py-20 md:py-28"
+        >
+          <div className="mx-auto max-w-[1332px] px-4 sm:px-6 lg:px-8">
+            <RevealSection>
+              <HowItWorksVisual />
+            </RevealSection>
+          </div>
+        </section>
+
+        <section
+          aria-labelledby="why-obligor"
+          className="border-b border-border py-20 md:py-28"
+        >
+          <div className="mx-auto max-w-[1332px] px-4 sm:px-6 lg:px-8">
+            <RevealSection>
+              <div className="max-w-xl text-left">
+                <span className="flex items-center gap-1.5 text-[13px] font-medium tracking-[-0.01em] text-muted-foreground">
+                  <Sparkle size={11} className="text-gold" />
+                  Why Obligor
+                </span>
+                <h2
+                  id="why-obligor"
+                  className="mt-3 text-[32px] font-medium leading-[122%] tracking-[-0.03em] sm:text-4xl"
+                >
+                  Siloed clearing falls short.
                 </h2>
-                <p className="text-base text-[#94A3B8] sm:text-lg">
-                  Run the live clearing engine in your browser, inspect the mathematical netting formulas,
-                  or query the x402 machine-payable gateway.
-                </p>
-                <div className="flex flex-wrap justify-center gap-4 pt-2">
-                  <Link
-                    href="/clear"
-                    className="inline-flex h-13 items-center justify-center rounded-full bg-gradient-to-r from-[#E8C874] via-[#C59A3F] to-[#A67C27] px-8 text-sm font-semibold text-black transition-transform hover:scale-105 shadow-[0_4px_20px_rgba(197,154,63,0.2)]"
-                  >
-                    Open Clearing Interface
-                  </Link>
-                  <Link
-                    href="/monad"
-                    className="inline-flex h-13 items-center justify-center rounded-full border border-[#1F1F1F] bg-[#141414] px-8 text-sm font-medium text-white transition-colors hover:border-[#C59A3F]/50"
-                  >
-                    Explore Monad Epochs
-                  </Link>
-                </div>
               </div>
+            </RevealSection>
+
+            <div className="mt-14 grid gap-4 md:grid-cols-2">
+              <RevealSection>
+                <div className="engraved h-full rounded-3xl bg-card p-8">
+                  <h3 className="text-sm font-medium uppercase tracking-[-0.01em] text-muted-foreground">
+                    Siloed protocols
+                  </h3>
+                  <ul className="mt-6 space-y-4">
+                    {COMPARISON.siloed.map((item) => (
+                      <li
+                        key={item}
+                        className="flex items-start gap-3 text-[15px] font-medium text-muted-foreground"
+                      >
+                        <span
+                          aria-hidden
+                          className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-secondary"
+                        >
+                          <span className="relative block h-2.5 w-0.5 bg-muted-foreground" />
+                        </span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </RevealSection>
+
+              <RevealSection delay={100}>
+                <div className="engraved h-full rounded-3xl bg-card p-8">
+                  <h3 className="text-sm font-medium uppercase tracking-[-0.01em]">
+                    Obligor
+                  </h3>
+                  <ul className="mt-6 space-y-4">
+                    {COMPARISON.obligor.map((item) => (
+                      <li
+                        key={item}
+                        className="flex items-start gap-3 text-[15px] font-medium"
+                      >
+                        <span
+                          aria-hidden
+                          className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground"
+                        >
+                          <Check className="h-3 w-3 text-background" />
+                        </span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </RevealSection>
             </div>
           </div>
+        </section>
+
+        <section aria-labelledby="calculator" className="border-b border-border py-20 md:py-28">
+          <div className="mx-auto max-w-[1332px] px-4 sm:px-6 lg:px-8">
+            <RevealSection>
+              <ProfitCalculator />
+            </RevealSection>
+          </div>
+        </section>
+
+        <FaqSection />
+
+        <CtaBand />
+
+        <section
+          aria-hidden
+          className="overflow-hidden border-t border-border py-10 md:py-16"
+        >
+          <Marquee duration={60}>
+            <span className="font-display whitespace-nowrap text-[120px] font-semibold leading-none tracking-[-0.03em] md:text-[220px]">
+              <span className="wordmark-stroke">Obligor&nbsp;&nbsp;&nbsp;&nbsp;Obligor&nbsp;&nbsp;&nbsp;&nbsp;Obligor&nbsp;&nbsp;&nbsp;&nbsp;</span>
+            </span>
+          </Marquee>
         </section>
       </main>
 

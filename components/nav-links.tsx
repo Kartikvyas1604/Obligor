@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const LINKS = [
   { href: "/clear", label: "Clear" },
+  { href: "/deal", label: "Deal rooms" },
   { href: "/monad", label: "Monad" },
   { href: "/agents", label: "Agents" },
   { href: "/trust", label: "Trust" },
@@ -14,7 +15,7 @@ export function NavLinks() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex items-center gap-0.5 text-sm sm:gap-1.5">
+    <nav aria-label="Primary" className="flex items-center gap-0.5 text-sm sm:gap-1.5">
       {LINKS.map(({ href, label }) => {
         const active = pathname === href;
         return (
@@ -31,7 +32,7 @@ export function NavLinks() {
             {label}
             <span
               aria-hidden
-              className={`absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary transition-opacity duration-200 sm:inset-x-3 ${
+              className={`absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-foreground transition-opacity duration-200 sm:inset-x-3 ${
                 active ? "opacity-100" : "opacity-0"
               }`}
             />

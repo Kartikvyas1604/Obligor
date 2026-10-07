@@ -42,36 +42,36 @@ export default function DealLauncherPage() {
       <div className="mx-auto max-w-3xl py-8 sm:py-12 space-y-8">
         {/* Header */}
         <div className="text-center space-y-3">
-          <div className="inline-flex items-center gap-2 font-['JetBrains_Mono',monospace] text-xs uppercase tracking-wider text-[#C59A3F]">
+          <div className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-foreground">
             <Users className="h-4 w-4" />
             <span>P2P Confidential Clearing</span>
           </div>
-          <h1 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight">
+          <h1 className="text-3xl sm:text-5xl font-extrabold text-foreground tracking-tight">
             Create a Live Bilateral Deal Room
           </h1>
-          <p className="text-sm sm:text-base text-[#94A3B8] max-w-xl mx-auto">
+          <p className="text-sm sm:text-base text-muted-foreground max-w-xl mx-auto">
             Initiate a private, cryptographically sealed session. Invite an institutional counterparty to clear offsetting positions without leaking trading books.
           </p>
         </div>
 
         {/* Creation Card */}
-        <div className="rounded-[28px] border border-[#1F1F1F] bg-[#0A0A0A] p-6 sm:p-10 space-y-6 shadow-2xl">
+        <div className="rounded-[28px] border border-border bg-card p-6 sm:p-10 space-y-6 shadow-2xl">
           {/* Desk Label */}
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-[#94A3B8]">Your Desk Name</label>
+            <label className="text-xs font-semibold text-muted-foreground">Your Desk Name</label>
             <input
               type="text"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder="e.g. Wintermute Desk Alpha"
-              className="w-full h-11 rounded-xl border border-[#1F1F1F] bg-[#141414] px-4 font-mono text-sm text-white focus-visible:outline-none focus-visible:border-[#C59A3F]"
+              className="w-full h-11 rounded-xl border border-border bg-secondary px-4 font-mono text-sm text-foreground focus-visible:outline-none focus-visible:border-foreground"
             />
           </div>
 
           {/* Wallet Address */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-[#94A3B8]">Your Wallet Address</label>
+              <label className="text-xs font-semibold text-muted-foreground">Your Wallet Address</label>
               <WalletConnect onConnect={(addr) => setWallet(addr)} />
             </div>
             <input
@@ -79,13 +79,13 @@ export default function DealLauncherPage() {
               value={wallet}
               onChange={(e) => setWallet(e.target.value)}
               placeholder="Base58 / EVM Address"
-              className="w-full h-11 rounded-xl border border-[#1F1F1F] bg-[#141414] px-4 font-mono text-xs text-white focus-visible:outline-none focus-visible:border-[#C59A3F]"
+              className="w-full h-11 rounded-xl border border-border bg-secondary px-4 font-mono text-xs text-foreground focus-visible:outline-none focus-visible:border-foreground"
             />
           </div>
 
           {/* Confidential Engine Selection */}
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-[#94A3B8]">Confidential Clearing Engine</label>
+            <label className="text-xs font-semibold text-muted-foreground">Confidential Clearing Engine</label>
             <div className="grid sm:grid-cols-2 gap-3">
               {[
                 {
@@ -105,12 +105,12 @@ export default function DealLauncherPage() {
                   onClick={() => setBackend(b.id as BackendKind)}
                   className={`flex flex-col text-left p-4 rounded-xl border text-xs transition-all ${
                     backend === b.id
-                      ? "border-[#C59A3F] bg-[#C59A3F]/10 text-white shadow-sm"
-                      : "border-[#1F1F1F] bg-[#141414] text-[#94A3B8] hover:text-white"
+                      ? "border-foreground bg-secondary text-foreground shadow-sm"
+                      : "border-border bg-secondary text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  <span className="font-bold text-sm text-white mb-1">{b.title}</span>
-                  <span className="text-[11px] leading-relaxed text-[#94A3B8]">{b.desc}</span>
+                  <span className="font-bold text-sm text-foreground mb-1">{b.title}</span>
+                  <span className="text-[11px] leading-relaxed text-muted-foreground">{b.desc}</span>
                 </button>
               ))}
             </div>
@@ -121,7 +121,7 @@ export default function DealLauncherPage() {
             type="button"
             disabled={creating}
             onClick={handleCreateSession}
-            className="w-full flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#E8C874] via-[#C59A3F] to-[#A67C27] py-4 font-bold text-black text-sm shadow-[0_4px_25px_rgba(197,154,63,0.3)] hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 rounded-full bg-primary py-4 font-bold text-primary-foreground text-sm transition-all disabled:opacity-50"
           >
             {creating ? (
               <span>Initializing Real-Time Session...</span>

@@ -19,7 +19,7 @@ export default function GlobalError({
       <p className="font-mono text-xs uppercase tracking-widest text-destructive">
         Computation failed
       </p>
-      <h1 className="font-serif text-2xl font-medium tracking-tight md:text-3xl">
+      <h1 className="text-2xl font-medium tracking-tight md:text-3xl">
         Couldn&rsquo;t complete this view
       </h1>
       <p className="max-w-sm text-sm text-muted-foreground">

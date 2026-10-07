@@ -202,7 +202,7 @@ export default function AgentsPage() {
           <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
             Machine-payable clearing · x402 V2 Protocol
           </p>
-          <h1 className="mt-2 font-serif text-3xl font-medium tracking-tight md:text-4xl">
+          <h1 className="mt-2 text-3xl font-medium tracking-tight md:text-4xl">
             Two Independent Agents, Machine-Payable Clearing
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
@@ -230,7 +230,7 @@ export default function AgentsPage() {
         </div>
 
         <div className="mt-2">
-          <h2 className="font-serif text-xl font-medium tracking-tight">Monad Multi-Pair Epoch Agent</h2>
+          <h2 className="text-xl font-medium tracking-tight">Monad Multi-Pair Epoch Agent</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             Simultaneous multi-pair batch execution over Monad under hardware-attested TEE.
           </p>

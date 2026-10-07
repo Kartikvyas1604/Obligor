@@ -20,7 +20,7 @@ export function ThemeToggle() {
     setDark(next);
     document.documentElement.classList.toggle("dark", next);
     try {
-      localStorage.setItem("luthren-theme", next ? "dark" : "light");
+      localStorage.setItem("obligor-theme", next ? "dark" : "light");
     } catch {}
   }
 

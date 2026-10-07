@@ -245,14 +245,14 @@ export default function ClearPage() {
         {/* Page Header */}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-2 font-['JetBrains_Mono',monospace] text-xs uppercase tracking-wider text-[#C59A3F] mb-1">
+            <div className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-foreground mb-1">
               <Layers className="h-3.5 w-3.5" />
               <span>Institutional Clearing Terminal</span>
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
+            <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
               Confidential Two-Party Clearing
             </h1>
-            <p className="mt-2 max-w-xl text-sm text-[#94A3B8]">
+            <p className="mt-2 max-w-xl text-sm text-muted-foreground">
               Two desks, one net initial margin. Encrypted computation ensures zero strategy leakage between competitors.
             </p>
           </div>
@@ -269,19 +269,19 @@ export default function ClearPage() {
           ].map((s) => (
             <div
               key={s.num}
-              className={`rounded-2xl border p-3.5 transition-all ${
+              className={`rounded-2xl border p-3.5 transition-colors duration-150 ${
                 s.done
-                  ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-300"
+                  ? "bg-success/40 bg-success/5 text-success"
                   : s.active
-                  ? "border-[#C59A3F]/50 bg-[#121212] text-white shadow-[0_0_15px_rgba(197,154,63,0.08)]"
-                  : "border-[#1F1F1F] bg-[#0A0A0A] text-[#64748B]"
+                  ? "border-foreground/60 bg-card text-foreground shadow-[0_0_15px_rgba(197,154,63,0.08)]"
+                  : "border-border bg-card text-muted-foreground"
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="font-['JetBrains_Mono',monospace] text-xs font-bold">
+                <span className="font-mono text-xs font-bold">
                   {s.done ? "✓" : s.num}
                 </span>
-                <span className={`h-1.5 w-1.5 rounded-full ${s.done ? "bg-emerald-400" : s.active ? "bg-[#E8C874]" : "bg-transparent"}`} />
+                <span className={`h-1.5 w-1.5 rounded-full ${s.done ? "bg-success" : s.active ? "bg-foreground" : "bg-transparent"}`} />
               </div>
               <span className="text-xs font-semibold block mt-1">{s.label}</span>
             </div>
@@ -289,14 +289,14 @@ export default function ClearPage() {
         </div>
 
         {/* Backend & Mode Selector */}
-        <section aria-label="Backend selection" className="rounded-2xl border border-[#1F1F1F] bg-[#0A0A0A] p-4">
+        <section aria-label="Backend selection" className="rounded-2xl border border-border bg-card p-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <Cpu className="h-4 w-4 text-[#C59A3F]" aria-hidden />
-              <span className="text-xs font-medium uppercase tracking-wider text-[#94A3B8]">
+              <Cpu className="h-4 w-4 text-foreground" aria-hidden />
+              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Confidential Backend:
               </span>
-              <div className="inline-flex rounded-lg border border-[#1F1F1F] bg-[#141414] p-0.5">
+              <div className="inline-flex rounded-lg border border-border bg-secondary p-0.5">
                 {[
                   { id: "arcium", label: "Arcium MPC (Solana)" },
                   { id: "enclave", label: "Nitro TEE (Monad)" },
@@ -308,8 +308,8 @@ export default function ClearPage() {
                     onClick={() => setBackend(b.id as BackendKind)}
                     className={`rounded-md px-3 py-1 font-mono text-xs transition-colors duration-150 ${
                       backend === b.id
-                        ? "bg-[#C59A3F] text-black font-semibold shadow-sm"
-                        : "text-[#94A3B8] hover:text-white"
+                        ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     {b.label}
@@ -318,42 +318,42 @@ export default function ClearPage() {
               </div>
             </div>
 
-            <label className="flex cursor-pointer items-center gap-2 text-xs text-[#94A3B8]">
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
               <input
                 type="checkbox"
                 checked={useLiveApi}
                 onChange={(e) => setUseLiveApi(e.target.checked)}
-                className="rounded border-[#1F1F1F] accent-[#C59A3F]"
+                className="rounded border-border "
               />
-              <span>Route via Live API Gateway (<code className="text-[#E8C874]">/api/v1/net-margin</code>)</span>
+              <span>Route via Live API Gateway (<code className="text-foreground">/api/v1/net-margin</code>)</span>
             </label>
           </div>
         </section>
 
         {phase === "setup" && (
-          <section aria-label="Party setup" className="rounded-2xl border border-[#1F1F1F] bg-[#0A0A0A] p-5 md:p-6 space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-[#1F1F1F] pb-4">
+          <section aria-label="Party setup" className="rounded-2xl border border-border bg-card p-5 md:p-6 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-border pb-4">
               <div>
-                <h2 className="text-base font-bold text-white">Step 1 &amp; 2: Portfolio Strategy &amp; Counterparty Binding</h2>
-                <p className="mt-0.5 text-xs text-[#94A3B8]">
+                <h2 className="text-base font-bold text-foreground">Step 1 &amp; 2: Portfolio Strategy &amp; Counterparty Binding</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   Select a live trading scenario or enter custom wallet addresses.
                 </p>
               </div>
 
               {/* 1-Click Scenario Quick Presets */}
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-[#64748B] font-['JetBrains_Mono',monospace]">Scenario:</span>
+                <span className="text-xs text-muted-foreground font-mono">Scenario:</span>
                 <button
                   type="button"
                   onClick={loadFixture}
-                  className="rounded-full border border-[#1F1F1F] bg-[#141414] px-3 py-1 text-xs text-[#94A3B8] hover:border-[#C59A3F] hover:text-white transition-colors"
+                  className="rounded-full border border-border bg-secondary px-3 py-1 text-xs text-muted-foreground hover:border-foreground hover:text-foreground transition-colors"
                 >
                   ⚡ SOL Basis Trade (Offsetting)
                 </button>
                 <button
                   type="button"
                   onClick={loadAdversarialFixture}
-                  className="rounded-full border border-[#1F1F1F] bg-[#141414] px-3 py-1 text-xs text-[#94A3B8] hover:border-red-500/50 hover:text-white transition-colors"
+                  className="rounded-full border border-border bg-secondary px-3 py-1 text-xs text-muted-foreground hover:border-red-500/50 hover:text-foreground transition-colors"
                 >
                   ⚠️ High-Exposure Portfolio
                 </button>
@@ -361,16 +361,16 @@ export default function ClearPage() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-xl border border-[#1F1F1F] bg-[#111111] p-4">
+              <div className="rounded-xl border border-border bg-card p-4">
                 <div className="flex items-center justify-between">
-                  <label htmlFor="wallet-a" className="text-xs font-semibold text-white flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                  <label htmlFor="wallet-a" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-success" />
                     <span>Party A (Your Trading Desk)</span>
                   </label>
                   <button
                     type="button"
                     onClick={() => toggleMockEquity("A")}
-                    className="inline-flex items-center gap-1 font-mono text-[11px] text-[#E8C874] hover:underline"
+                    className="inline-flex items-center gap-1 font-mono text-[11px] text-foreground hover:underline"
                   >
                     <Plus className="h-3 w-3" />
                     {bookA.legs.some((l) => l.instrument.includes("tAAPL"))
@@ -386,24 +386,24 @@ export default function ClearPage() {
                   placeholder="Base58 address — 32–44 chars"
                   autoComplete="off"
                   spellCheck={false}
-                  className={`mt-2 h-10 w-full rounded-md border bg-black px-3 font-mono text-xs transition-colors duration-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C59A3F] ${
-                    errorA ? "border-red-500" : "border-[#1F1F1F]"
+                  className={`mt-2 h-10 w-full rounded-md border bg-background px-3 font-mono text-xs transition-colors duration-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                    errorA ? "border-red-500" : "border-border"
                   }`}
                   aria-invalid={!!errorA}
                 />
                 {errorA && <p className="mt-1.5 text-xs text-red-400">{errorA}</p>}
               </div>
 
-              <div className="rounded-xl border border-[#1F1F1F] bg-[#111111] p-4">
+              <div className="rounded-xl border border-border bg-card p-4">
                 <div className="flex items-center justify-between">
-                  <label htmlFor="wallet-b" className="text-xs font-semibold text-white flex items-center gap-1.5">
+                  <label htmlFor="wallet-b" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                     <span className="h-2 w-2 rounded-full bg-blue-400" />
                     <span>Party B (Counterparty Desk)</span>
                   </label>
                   <button
                     type="button"
                     onClick={() => toggleMockEquity("B")}
-                    className="inline-flex items-center gap-1 font-mono text-[11px] text-[#E8C874] hover:underline"
+                    className="inline-flex items-center gap-1 font-mono text-[11px] text-foreground hover:underline"
                   >
                     <Plus className="h-3 w-3" />
                     {bookB.legs.some((l) => l.instrument.includes("tAAPL"))
@@ -419,8 +419,8 @@ export default function ClearPage() {
                   placeholder="Base58 address — 32–44 chars"
                   autoComplete="off"
                   spellCheck={false}
-                  className={`mt-2 h-10 w-full rounded-md border bg-black px-3 font-mono text-xs transition-colors duration-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C59A3F] ${
-                    errorB ? "border-red-500" : "border-[#1F1F1F]"
+                  className={`mt-2 h-10 w-full rounded-md border bg-background px-3 font-mono text-xs transition-colors duration-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                    errorB ? "border-red-500" : "border-border"
                   }`}
                   aria-invalid={!!errorB}
                 />
@@ -432,7 +432,7 @@ export default function ClearPage() {
               <button
                 type="button"
                 onClick={applyWallets}
-                className="inline-flex h-10 items-center gap-2 rounded-full border border-[#1F1F1F] bg-[#141414] px-4 text-xs font-medium text-white hover:border-[#333]"
+                className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-secondary px-4 text-xs font-medium text-foreground "
               >
                 <Wallet className="h-3.5 w-3.5" aria-hidden />
                 <span>Save Wallets</span>
@@ -447,7 +447,7 @@ export default function ClearPage() {
                 type="button"
                 disabled={busy}
                 onClick={compute}
-                className="ml-auto inline-flex h-12 items-center gap-2 rounded-full bg-gradient-to-r from-[#E8C874] via-[#C59A3F] to-[#A67C27] px-8 text-sm font-bold text-black transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_4px_25px_rgba(197,154,63,0.3)] disabled:opacity-50"
+                className="ml-auto inline-flex h-12 items-center gap-2 rounded-full bg-primary px-8 text-sm font-bold text-primary-foreground transition-colors duration-150 disabled:opacity-50"
               >
                 <Lock className="h-4 w-4" aria-hidden />
                 <span>Execute Step 3: Run Confidential Netting</span>
@@ -460,25 +460,25 @@ export default function ClearPage() {
         <NettingCalculator />
 
         {phase === "computing" && (
-          <section aria-label="Computing" aria-busy="true" className="anim-fade-up rounded-2xl border border-[#C59A3F]/40 bg-[#0A0A0A] p-6 space-y-4">
+          <section aria-label="Computing" aria-busy="true" className="anim-fade-up rounded-2xl border border-border bg-card p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <p className="flex items-center gap-2 text-sm font-bold text-white">
-                <Lock className="h-4 w-4 text-[#E8C874]" aria-hidden />
+              <p className="flex items-center gap-2 text-sm font-bold text-foreground">
+                <Lock className="h-4 w-4 text-foreground" aria-hidden />
                 Running Confidential Compute Enclave
               </p>
-              <span className="rounded-full border border-[#C59A3F]/40 bg-[#C59A3F]/10 px-3 py-1 font-mono text-xs uppercase text-[#E8C874]">
+              <span className="rounded-full border border-border bg-secondary px-3 py-1 font-mono text-xs uppercase text-foreground">
                 {backend === "arcium" ? "Arcium MXE Circuit" : backend === "enclave" ? "AWS Nitro TEE" : "Simulated Local"}
               </span>
             </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-[#1F1F1F]" aria-hidden>
-              <div className="anim-shimmer h-full w-full rounded-full bg-gradient-to-r from-transparent via-[#E8C874] to-transparent" />
+            <div className="h-1.5 overflow-hidden rounded-full bg-secondary" aria-hidden>
+              <div className="anim-shimmer h-full w-full rounded-full bg-gradient-to-r from-transparent via-foreground to-transparent" />
             </div>
             <ol className="space-y-2 pt-2">
               {stages.map((s, i) => (
                 <li
                   key={s}
                   className={`flex items-center gap-2 font-mono text-xs transition-colors duration-200 ${
-                    i < stage ? "text-emerald-400" : i === stage ? "text-white font-bold" : "text-[#64748B]"
+                    i < stage ? "text-success" : i === stage ? "text-foreground font-bold" : "text-muted-foreground"
                   }`}
                 >
                   <span aria-hidden className="w-4">
@@ -487,7 +487,7 @@ export default function ClearPage() {
                   {s}
                   {i === stage && (
                     <LoaderCircle
-                      className="h-3 w-3 animate-spin text-[#E8C874] motion-reduce:animate-none"
+                      className="h-3 w-3 animate-spin text-foreground motion-reduce:animate-none"
                       aria-hidden
                     />
                   )}
@@ -515,17 +515,17 @@ export default function ClearPage() {
             />
 
             {apiComputationId && (
-              <div className="rounded-xl border border-[#1F1F1F] bg-[#0A0A0A] p-4 font-mono text-xs text-[#94A3B8]">
+              <div className="rounded-xl border border-border bg-card p-4 font-mono text-xs text-muted-foreground">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span>
-                    Computation ID: <strong className="text-white">{apiComputationId}</strong>
+                    Computation ID: <strong className="text-foreground">{apiComputationId}</strong>
                   </span>
                   {apiAttestation && (
-                    <span className="text-[#C59A3F]">
+                    <span className="text-foreground">
                       Attestation: {apiAttestation.slice(0, 24)}...
                     </span>
                   )}
-                  <span className="text-emerald-400">🔒 Zero Counterparty Legs Leaked</span>
+                  <span className="text-success">🔒 Zero Counterparty Legs Leaked</span>
                 </div>
               </div>
             )}
@@ -533,14 +533,14 @@ export default function ClearPage() {
         )}
 
         {/* Live Pyth Network Sync Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#1F1F1F] bg-[#0A0A0A] p-4 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4 text-xs">
           <div className="flex items-center gap-2">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
             </span>
-            <span className="text-white font-medium">Pyth Hermes Network Oracles:</span>
-            <span className="font-mono text-[#94A3B8]">
+            <span className="text-foreground font-medium">Pyth Hermes Network Oracles:</span>
+            <span className="font-mono text-muted-foreground">
               {oracleSyncMessage || "Feeds active for SOL, BTC, ETH, bAAPL, MON, USDC"}
             </span>
           </div>
@@ -549,7 +549,7 @@ export default function ClearPage() {
             type="button"
             disabled={oracleSyncing}
             onClick={refreshOraclePrices}
-            className="rounded-full border border-[#1F1F1F] bg-[#141414] px-4 py-1.5 font-mono text-xs text-[#E8C874] hover:border-[#C59A3F] transition-colors disabled:opacity-50"
+            className="rounded-full border border-border bg-secondary px-4 py-1.5 font-mono text-xs text-foreground hover:border-foreground transition-colors disabled:opacity-50"
           >
             {oracleSyncing ? "Fetching Pyth Feeds..." : "⚡ Sync Live Oracle Prices"}
           </button>
@@ -579,7 +579,7 @@ export default function ClearPage() {
             <button
               type="button"
               onClick={reset}
-              className="inline-flex h-11 items-center gap-2 rounded-full border border-[#1F1F1F] bg-[#0A0A0A] px-6 text-sm font-medium text-white transition-colors hover:bg-[#141414] hover:border-[#333]"
+              className="inline-flex h-11 items-center gap-2 rounded-full border border-border bg-card px-6 text-sm font-medium text-foreground transition-colors hover:bg-secondary "
             >
               <RotateCcw className="h-4 w-4" aria-hidden />
               <span>Start New Bilateral Session</span>

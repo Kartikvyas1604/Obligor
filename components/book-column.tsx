@@ -23,11 +23,11 @@ function CopyAddress({ address }: { address: string }) {
           setCopied(false);
         }
       }}
-      className="relative inline-flex h-6 w-6 items-center justify-center rounded text-[#94A3B8] transition-colors duration-100 hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C59A3F]"
+      className="relative inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors duration-100 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       aria-label={copied ? "Address copied" : `Copy address ${truncateAddress(address)}`}
     >
       {copied ? (
-        <Check className="h-3.5 w-3.5 text-[#E8C874]" aria-hidden />
+        <Check className="h-3.5 w-3.5 text-foreground" aria-hidden />
       ) : (
         <Copy className="h-3.5 w-3.5" aria-hidden />
       )}
@@ -42,7 +42,7 @@ function ExplorerLink({ address }: { address: string }) {
       target="_blank"
       rel="noopener noreferrer"
       title={`View ${address} on Solana Explorer`}
-      className="underline-offset-4 transition-colors duration-100 hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C59A3F]"
+      className="underline-offset-4 transition-colors duration-100 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       aria-label={`View address ${truncateAddress(address)} on Solana Explorer, opens in new tab`}
     >
       {truncateAddress(address)}
@@ -62,22 +62,22 @@ function LegRow({
   const negative = leg.signedExposureUsd < 0;
   return (
     <li
-      className="anim-fade-up flex items-center justify-between gap-3 border-b border-[#1F1F1F] px-4 py-3 transition-colors duration-150 hover:bg-[#141414] last:border-0"
+      className="anim-fade-up flex items-center justify-between gap-3 border-b border-border px-4 py-3 transition-colors duration-150 hover:bg-secondary last:border-0"
       style={{ animationDelay: `${index * 60}ms` }}
     >
       <div className="min-w-0">
-        <p className="truncate text-sm font-medium text-white flex items-center gap-2">
+        <p className="truncate text-sm font-medium text-foreground flex items-center gap-2">
           <span>{leg.instrument}</span>
-          <span className="rounded border border-[#1F1F1F] bg-[#141414] px-1.5 py-0.5 font-mono text-[10px] uppercase text-[#94A3B8]">
+          <span className="rounded border border-border bg-secondary px-1.5 py-0.5 font-mono text-[10px] uppercase text-muted-foreground">
             {leg.venue}
           </span>
           {leg.source === "live" && (
-            <span className="rounded border border-[#C59A3F]/40 bg-[#C59A3F]/10 px-1.5 py-0.5 font-mono text-[10px] uppercase text-[#E8C874]">
+            <span className="rounded border border-border bg-secondary px-1.5 py-0.5 font-mono text-[10px] uppercase text-foreground">
               live
             </span>
           )}
         </p>
-        <p className="mt-0.5 font-mono text-xs text-[#94A3B8] tabular-nums">
+        <p className="mt-0.5 font-mono text-xs text-muted-foreground tabular-nums">
           {leg.qty.toLocaleString("en-US", { maximumFractionDigits: 4 })} @ {usd(leg.markUsd)} &bull; haircut{" "}
           {(leg.haircut * 100).toFixed(0)}%
         </p>
@@ -86,7 +86,7 @@ function LegRow({
       <div className="flex items-center gap-3">
         <p
           className={`font-mono text-sm font-semibold tabular-nums ${
-            negative ? "text-red-400" : "text-emerald-400"
+            negative ? "text-destructive" : "text-success"
           }`}
         >
           {negative ? "−" : "+"}
@@ -97,7 +97,7 @@ function LegRow({
             type="button"
             onClick={onDelete}
             title="Delete this leg"
-            className="p-1 rounded text-[#64748B] hover:text-red-400 transition-colors"
+            className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors"
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>
@@ -126,18 +126,18 @@ export function BookColumn({
 
   if (hidden) {
     return (
-      <div className="rounded-[20px] border border-[#1F1F1F] bg-[#0A0A0A] p-6">
+      <div className="rounded-[20px] border border-border bg-card p-6">
         <div className="flex items-center gap-2">
-          <EyeOff className="h-4 w-4 text-[#94A3B8]" aria-hidden />
-          <h3 className="text-sm font-medium text-white">{title}</h3>
+          <EyeOff className="h-4 w-4 text-muted-foreground" aria-hidden />
+          <h3 className="text-sm font-medium text-foreground">{title}</h3>
         </div>
-        <p className="mt-4 text-sm text-[#94A3B8]">
+        <p className="mt-4 text-sm text-muted-foreground">
           Sealed. This party&rsquo;s legs stay encrypted through the computation — that is the
           whole point.
         </p>
         <div className="mt-4 space-y-2" aria-hidden>
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-4 rounded bg-[#141414] animate-pulse motion-reduce:animate-none" />
+            <div key={i} className="h-4 rounded bg-secondary animate-pulse motion-reduce:animate-none" />
           ))}
         </div>
       </div>
@@ -145,18 +145,18 @@ export function BookColumn({
   }
 
   return (
-    <div className="overflow-hidden rounded-[20px] border border-[#1F1F1F] bg-[#0A0A0A] flex flex-col justify-between">
+    <div className="overflow-hidden rounded-[20px] border border-border bg-card flex flex-col justify-between">
       <div>
-        <div className="border-b border-[#1F1F1F] px-4 py-3 flex items-center justify-between gap-2">
-          <h3 className="text-sm font-bold text-white">{title}</h3>
-          <div className="flex items-center gap-3 font-mono text-xs text-[#94A3B8] tabular-nums">
+        <div className="border-b border-border px-4 py-3 flex items-center justify-between gap-2">
+          <h3 className="text-sm font-bold text-foreground">{title}</h3>
+          <div className="flex items-center gap-3 font-mono text-xs text-muted-foreground tabular-nums">
             <ExplorerLink address={wallet} />
             <CopyAddress address={wallet} />
             {onOpenAddModal && (
               <button
                 type="button"
                 onClick={onOpenAddModal}
-                className="inline-flex items-center gap-1 rounded-full border border-[#C59A3F]/40 bg-[#C59A3F]/10 px-2.5 py-0.5 text-xs text-[#E8C874] hover:bg-[#C59A3F]/20 font-sans"
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-0.5 text-xs text-foreground hover:bg-secondary font-sans"
               >
                 <Plus className="h-3 w-3" />
                 <span>Add Leg</span>
@@ -166,15 +166,15 @@ export function BookColumn({
         </div>
         {legs.length === 0 ? (
           <div className="px-4 py-10 text-center space-y-2">
-            <p className="text-sm font-medium text-white">No active legs in book</p>
-            <p className="text-xs text-[#94A3B8]">
+            <p className="text-sm font-medium text-foreground">No active legs in book</p>
+            <p className="text-xs text-muted-foreground">
               Click &quot;Add Leg&quot; or select a quick scenario above.
             </p>
             {onOpenAddModal && (
               <button
                 type="button"
                 onClick={onOpenAddModal}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[#1F1F1F] bg-[#141414] px-4 py-1.5 text-xs text-[#E8C874] hover:border-[#C59A3F]"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary px-4 py-1.5 text-xs text-foreground hover:border-foreground"
               >
                 <Plus className="h-3.5 w-3.5" />
                 <span>Create Custom Position Leg</span>
@@ -195,9 +195,9 @@ export function BookColumn({
         )}
       </div>
 
-      <div className="flex items-baseline justify-between border-t border-[#1F1F1F] bg-[#111111] px-4 py-3 transition-colors duration-150">
-        <p className="text-xs text-[#94A3B8]">Siloed initial margin requirement</p>
-        <p className="font-mono text-sm font-bold text-white tabular-nums">{usd(im)}</p>
+      <div className="flex items-baseline justify-between border-t border-border bg-card px-4 py-3 transition-colors duration-150">
+        <p className="text-xs text-muted-foreground">Siloed initial margin requirement</p>
+        <p className="font-mono text-sm font-bold text-foreground tabular-nums">{usd(im)}</p>
       </div>
     </div>
   );

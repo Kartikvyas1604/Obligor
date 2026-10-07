@@ -4,47 +4,46 @@ _Status: active_
 
 ## Voice
 
-Obligor is confidential two-party clearing for trading desks. Voice: precise, calm, honest. Short declarative sentences. Numbers do the persuading; no hype, no gradient hero copy. We name tradeoffs aloud ("TEE ≠ MPC"). Never overclaim.
+Obligor is confidential two-party clearing for trading desks. Voice: precise, calm, honest. Short declarative sentences. Numbers do the persuading; no hype. We name tradeoffs aloud ("TEE ≠ MPC"). Never overclaim.
 
-## Palette — "Monochrome" (launch-grade, #131316 base)
+## Palette — "MetEngine industrial monochrome" (user-directed, 2026-10)
 
-Locked base: near-black #131316, pure white text. Light theme is the exact reverse: near-white #FAFAFA base, #131316 text. No brand accent color at all — white-on-black (and black-on-white) CTAs carry the interface. Color appears only where it carries meaning: green = success/savings, red = destructive, neutral gray = TEE/secondary. Focus rings follow the theme foreground with background-matched offset. Discipline: no gradient text, no glow shadows, no sheen, no colored borders except semantic.
+Dark-first industrial monochrome modeled on metengine.xyz. Page canvas #121212, engraved dual-edge borders (dark groove #090909 + light edge #202020), muted text ramp #E8E8E8 → #646464. No decorative gradients or glows; the light CTA button is the accent. Color appears only where it carries meaning: green = success/savings, red = destructive, neutral gray = TEE/secondary.
 
 | Token | Light (reversed) | Dark (locked base) |
 | --- | --- | --- |
-| background | #FAFAFA | **#131316** |
-| surface (card) | #FFFFFF | #19191D |
-| popover | #FFFFFF | #1E1E23 |
-| foreground | #131316 | #FFFFFF |
-| muted-foreground | #6B6B74 | #A1A1AA |
-| border | #E4E4E7 | #27272A |
-| **primary (CTA)** | #131316 (black button) | #FFFFFF (white button) |
-| primary-foreground | #FAFAFA | #131316 |
-| ring | #131316 | #FFFFFF |
-| success | #079455 | #3FB950 |
-| steel (TEE marker) | #6F7C88 | #8A95A1 |
-| destructive | #D92D20 | #F04438 |
+| background | #f5f5f5 | **#121212** |
+| surface (card) | #ffffff | #121212 (engraved borders separate) |
+| popover | #ffffff | #1a1a1a |
+| foreground | #171717 | #e8e8e8 |
+| muted-foreground | #525252 | #838383 |
+| border | #e4e4e4 | #202020 |
+| **primary (CTA)** | #171717 | **#e8e8e8 (light letterpress button)** |
+| primary-foreground | #f5f5f5 | #121212 |
+| ring | #171717 | #e8e8e8 |
+| success | #079455 | **#45d09d** |
+| steel (TEE marker) | #6f7c88 | #7f7f7f |
+| destructive | #d92d20 | **#f16056** |
+| **gold (sparkle accent)** | #c9972b | **#ffde95** |
 
-Rule: the interface is monochrome; motion and typography do the branding. Green/red/gray are semantic only — never decorative.
+Gold rule (MetEngine-style, user-directed): gold exists ONLY as the 4-point sparkle glyph — logo mark, favicon, and eyebrow labels. Never gold text, buttons, borders, or backgrounds. All other accents stay semantic (green = success, red = destructive, gray = TEE).
 
-## Typography
-
-- **Headings:** Geist (display sans, tight tracking).
-- **Body/UI:** Inter.
-- **Numbers/pricing only:** Geist Mono with `tabular-nums` — balances, margins, addresses.
+Signature details: engraved card edges (`1px #202020` border + offset `1px #090909` shadows), engraved horizontal rules, fixed frame rails around the max-w-1332px content column, and a 1.5%-opacity grain overlay across the whole page.
 
 ## Typography
 
-Superseded by the user-directed typography section above: Geist headings, Inter body, Geist Mono numbers. Serif removed.
-- UI/body: **Geist Sans**.
-- Numbers/addresses/code: **Geist Mono** with `tabular-nums` always for currency; 2 decimals everywhere for USD.
+- **Everything (headings, body, buttons, stats):** Plus Jakarta Sans, medium weight, tight negative tracking (-0.03em on display sizes).
+- **Display wordmark / giant marquee:** Clash Grotesk (Fontshare), heavy, outlined with text-stroke for the footer wordmark band.
+- **Numbers/addresses/code only:** Geist Mono with `tabular-nums` — balances, margins, addresses. 2 decimals everywhere for USD.
 
-Rule: Geist (headings) and Inter (body) share the neutral sans family look — headings use tighter tracking and medium weight to differentiate. Numbers always Geist Mono.
+## Motion (MetEngine language)
+
+- Scroll reveals: blur(10px) + fade + 24px rise, 700ms ease-out, staggered by section.
+- Count-up numbers in the stats band on scroll into view.
+- Linear infinite marquees (40s) for ticker bands and the giant footer wordmark.
+- Buttons: 200ms transitions, `active:scale-[0.97]` press. No hover-scale on cards.
+- Grain overlay + engraved edges do the texture work. Respect `prefers-reduced-motion` everywhere.
 
 ## Gradients & texture
 
-None as decoration. Depth via surface steps (#0B0C0F → #14161B → #1A1D23), 1px borders `#262A31`, and a single radial jade tint at very low opacity behind the hero only.
-
-## Motion
-
-CSS transitions, 100–250ms, ease-out. Jade flash on margin numbers when they resolve. Respect `prefers-reduced-motion` everywhere.
+None as decoration. Depth via surface steps, engraved dual-edge borders, and the fixed grain overlay at 1.5% opacity.

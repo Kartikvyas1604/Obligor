@@ -7,59 +7,51 @@ export function HeroMockup() {
   const [activeTab, setActiveTab] = useState<"netted" | "siloed">("netted");
 
   return (
-    <div className="relative mx-auto w-full max-w-lg lg:max-w-none">
-      {/* Subtle Ambient Gold Glow Behind Mockup */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -inset-1 rounded-[32px] bg-gradient-to-r from-[#E8C874]/15 via-[#C59A3F]/10 to-[#A67C27]/15 blur-2xl opacity-60"
-      />
-
-      {/* Main Glass/Dark Frame */}
-      <div className="relative rounded-[28px] border border-[#1F1F1F] bg-[#0A0A0A] p-5 shadow-[0_20px_50px_rgba(0,0,0,0.8)] backdrop-blur-xl sm:p-7">
-        {/* Top Header Bar */}
-        <div className="flex items-center justify-between border-b border-[#1A1A1A] pb-4">
+    <div className="relative mx-auto w-full max-w-2xl">
+      <div className="rounded-2xl engraved bg-card p-5 sm:p-7">
+        <div className="flex items-center justify-between border-b border-border pb-4">
           <div className="flex items-center gap-2.5">
-            <div className="flex gap-1.5" aria-hidden="true">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#222222]" />
-              <span className="h-2.5 w-2.5 rounded-full bg-[#222222]" />
-              <span className="h-2.5 w-2.5 rounded-full bg-[#C59A3F]/60" />
-            </div>
-            <span className="font-['JetBrains_Mono',monospace] text-xs text-[#94A3B8] tracking-tight">
-              SESSION: #0x8F92..A4
+            <span className="font-mono text-xs tracking-tight text-muted-foreground">
+              SESSION: 0x8F92..A4
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5 rounded-full border border-[#C59A3F]/30 bg-[#C59A3F]/10 px-3 py-1 font-['JetBrains_Mono',monospace] text-[11px] text-[#E8C874]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#E8C874] animate-pulse" />
+          <div className="flex items-center gap-1.5 rounded-full border border-border bg-secondary px-3 py-1 font-mono text-[11px] text-muted-foreground">
+            <span className="h-1.5 w-1.5 rounded-full bg-steel" aria-hidden />
             CONFIDENTIAL MPC
           </div>
         </div>
 
-        {/* Hero Margin Overview Card */}
-        <div className="mt-5 rounded-2xl border border-[#1A1A1A] bg-[#000000] p-5">
+        <div className="mt-5 rounded-xl border border-border bg-background p-5">
           <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wider text-[#94A3B8]">
-              Combined Initial Margin
+            <span className="text-xs uppercase tracking-wider text-muted-foreground">
+              Combined initial margin
             </span>
-            <div className="flex rounded-full border border-[#1F1F1F] bg-[#0A0A0A] p-0.5 text-xs">
+            <div
+              className="flex rounded-full border border-border bg-background p-0.5 text-xs"
+              role="group"
+              aria-label="Margin mode"
+            >
               <button
                 type="button"
                 onClick={() => setActiveTab("netted")}
-                className={`rounded-full px-3 py-1 font-medium transition-all ${
+                aria-pressed={activeTab === "netted"}
+                className={`rounded-full px-3 py-1 font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                   activeTab === "netted"
-                    ? "bg-[#1F1F1F] text-[#E8C874] shadow-sm"
-                    : "text-[#94A3B8] hover:text-white"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                Netted (MPC)
+                Netted
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("siloed")}
-                className={`rounded-full px-3 py-1 font-medium transition-all ${
+                aria-pressed={activeTab === "siloed"}
+                className={`rounded-full px-3 py-1 font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                   activeTab === "siloed"
-                    ? "bg-[#1F1F1F] text-white shadow-sm"
-                    : "text-[#94A3B8] hover:text-white"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Siloed
@@ -67,92 +59,88 @@ export function HeroMockup() {
             </div>
           </div>
 
-          <div className="mt-4 flex items-baseline justify-between gap-4">
+          <div className="mt-4 flex flex-wrap items-baseline justify-between gap-4">
             <div>
-              <p className="font-['JetBrains_Mono',monospace] text-3xl font-bold tracking-tight text-white sm:text-4xl">
+              <p className="font-mono text-3xl font-semibold tracking-tight tabular-nums text-foreground sm:text-4xl">
                 {activeTab === "netted" ? "$24,500.00" : "$46,500.00"}
               </p>
-              <p className="mt-1 font-['JetBrains_Mono',monospace] text-xs text-[#94A3B8]">
+              <p className="mt-1 font-mono text-xs tabular-nums text-muted-foreground">
                 {activeTab === "netted"
-                  ? "Net Cross-Desk Exposure: -$15,000.00"
-                  : "Gross Siloed Exposure: $325,000.00"}
+                  ? "Net cross-desk exposure: -$15,000.00"
+                  : "Gross siloed exposure: $325,000.00"}
               </p>
             </div>
 
             {activeTab === "netted" && (
-              <div className="rounded-xl border border-[#C59A3F]/30 bg-gradient-to-b from-[#C59A3F]/15 to-transparent p-2.5 text-right">
-                <span className="text-[10px] uppercase font-semibold tracking-wider text-[#C59A3F]">
-                  Capital Freed
+              <div className="rounded-lg border border-success/25 bg-success/10 p-2.5 text-right">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-success">
+                  Capital freed
                 </span>
-                <p className="font-['JetBrains_Mono',monospace] text-lg font-bold text-[#E8C874]">
+                <p className="font-mono text-lg font-semibold tabular-nums text-success">
                   +$22,000.00
                 </p>
-                <span className="font-['JetBrains_Mono',monospace] text-[10px] text-[#E8C874]/80">
+                <span className="font-mono text-[10px] tabular-nums text-success/80">
                   47.3% reduction
                 </span>
               </div>
             )}
           </div>
 
-          {/* Collateral Progress Bar */}
           <div className="mt-5 space-y-1.5">
-            <div className="flex justify-between text-[11px] font-['JetBrains_Mono',monospace] text-[#94A3B8]">
-              <span>Collateral Efficiency</span>
-              <span className="text-[#E8C874]">{activeTab === "netted" ? "52.7% Posted" : "100% Required"}</span>
+            <div className="flex justify-between font-mono text-[11px] tabular-nums text-muted-foreground">
+              <span>Collateral efficiency</span>
+              <span>{activeTab === "netted" ? "52.7% posted" : "100% required"}</span>
             </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-[#1A1A1A]">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-[#E8C874] via-[#C59A3F] to-[#A67C27] transition-all duration-500 ease-out"
+                className="h-full rounded-full bg-foreground transition-[width] duration-500 ease-out"
                 style={{ width: activeTab === "netted" ? "52.7%" : "100%" }}
               />
             </div>
           </div>
         </div>
 
-        {/* Counterparty Books Preview */}
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {/* Party A Card */}
-          <div className="rounded-2xl border border-[#1A1A1A] bg-[#000000] p-4">
+          <div className="rounded-xl border border-border bg-background p-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-white">Desk Alpha (Party A)</span>
-              <span className="rounded-full bg-[#141414] px-2 py-0.5 font-['JetBrains_Mono',monospace] text-[10px] text-[#94A3B8]">
-                Kamino / RO
+              <span className="text-xs font-medium text-foreground">Desk Alpha (Party A)</span>
+              <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+                Kamino
               </span>
             </div>
-            <div className="mt-3 space-y-2 font-['JetBrains_Mono',monospace] text-xs">
-              <div className="flex justify-between text-[#94A3B8]">
+            <div className="mt-3 space-y-2 font-mono text-xs tabular-nums">
+              <div className="flex justify-between text-muted-foreground">
                 <span>SOL Lend (10%)</span>
-                <span className="text-white">+$90,000</span>
+                <span className="text-foreground">+$90,000</span>
               </div>
-              <div className="flex justify-between text-[#94A3B8]">
+              <div className="flex justify-between text-muted-foreground">
                 <span>tAAPL Long (25%)</span>
-                <span className="text-white">+$55,000</span>
+                <span className="text-foreground">+$55,000</span>
               </div>
-              <div className="border-t border-[#1A1A1A] pt-1.5 flex justify-between text-[#E8C874]">
+              <div className="flex justify-between border-t border-border pt-1.5 text-foreground">
                 <span>Siloed IM</span>
                 <span>$26,750</span>
               </div>
             </div>
           </div>
 
-          {/* Party B Card */}
-          <div className="rounded-2xl border border-[#1A1A1A] bg-[#000000] p-4">
+          <div className="rounded-xl border border-border bg-background p-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-white">Counterparty (Party B)</span>
-              <span className="rounded-full bg-[#141414] px-2 py-0.5 font-['JetBrains_Mono',monospace] text-[10px] text-[#94A3B8]">
-                Drift Perps
+              <span className="text-xs font-medium text-foreground">Desk Bravo (Party B)</span>
+              <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+                Drift
               </span>
             </div>
-            <div className="mt-3 space-y-2 font-['JetBrains_Mono',monospace] text-xs">
-              <div className="flex justify-between text-[#94A3B8]">
+            <div className="mt-3 space-y-2 font-mono text-xs tabular-nums">
+              <div className="flex justify-between text-muted-foreground">
                 <span>SOL-PERP Short (15%)</span>
-                <span className="text-white">-$95,000</span>
+                <span className="text-foreground">-$95,000</span>
               </div>
-              <div className="flex justify-between text-[#94A3B8]">
+              <div className="flex justify-between text-muted-foreground">
                 <span>BTC-PERP Long (15%)</span>
-                <span className="text-white">+$30,000</span>
+                <span className="text-foreground">+$30,000</span>
               </div>
-              <div className="border-t border-[#1A1A1A] pt-1.5 flex justify-between text-[#E8C874]">
+              <div className="flex justify-between border-t border-border pt-1.5 text-foreground">
                 <span>Siloed IM</span>
                 <span>$19,750</span>
               </div>
@@ -160,17 +148,12 @@ export function HeroMockup() {
           </div>
         </div>
 
-        {/* Footer Pill Status */}
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-full border border-[#1A1A1A] bg-[#000000] px-4 py-2.5 text-xs text-[#94A3B8]">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-xs text-muted-foreground">
           <div className="flex items-center gap-2">
-            <Lock className="h-3.5 w-3.5 text-[#C59A3F]" />
-            <span className="font-['JetBrains_Mono',monospace] text-[11px]">
-              Zero Plaintext Leaks Enforced
-            </span>
+            <Lock className="h-3.5 w-3.5" aria-hidden />
+            <span className="font-mono text-[11px]">Zero plaintext leaks enforced</span>
           </div>
-          <span className="font-['JetBrains_Mono',monospace] text-[11px] text-[#E8C874]">
-            x402 V2 Micro-Settled
-          </span>
+          <span className="font-mono text-[11px] text-foreground">x402 V2 micro-settled</span>
         </div>
       </div>
     </div>

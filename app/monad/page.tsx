@@ -95,7 +95,7 @@ export default function MonadPage() {
             <p className="font-mono text-xs uppercase tracking-widest text-steel">
               Monad · parallel multi-pair clearing
             </p>
-            <h1 className="mt-2 font-serif text-3xl font-medium tracking-tight md:text-4xl">
+            <h1 className="mt-2 text-3xl font-medium tracking-tight md:text-4xl">
               Many Pairs, One Epoch
             </h1>
             <p className="mt-2 max-w-xl text-sm text-muted-foreground">

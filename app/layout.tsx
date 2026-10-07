@@ -1,32 +1,25 @@
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans, JetBrains_Mono, Inter } from "next/font/google";
+import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta-sans",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-});
-
-const inter = Inter({
-  variable: "--font-inter",
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
   title: "Obligor — Confidential Two-Party Clearing",
   description:
-    "Institutional-grade clearing and yield execution, enforced by code. Precision execution. Golden standard.",
+    "Two desks. One net initial margin. Neither party sees the other's book. Confidential clearing via Arcium MPC on Solana and attested TEEs on Monad.",
 };
 
 export const viewport: Viewport = {
-  themeColor: "#000000",
+  themeColor: "#121212",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -34,13 +27,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${plusJakartaSans.variable} ${jetbrainsMono.variable} ${inter.variable} dark h-full antialiased`}
+      className={`${plusJakartaSans.variable} ${geistMono.variable} dark h-full antialiased`}
     >
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://api.fontshare.com/v2/css?f[]=clash-grotesk@400,500,600&display=swap"
+          rel="stylesheet"
+        />
       </head>
-      <body className="min-h-full flex flex-col bg-[#000000] text-white font-['Plus_Jakarta_Sans',sans-serif]">
+      <body className="flex min-h-full flex-col bg-background font-sans text-foreground">
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem("obligor-theme")==="light"){document.documentElement.classList.remove("dark")}}catch(e){}`,
+          }}
+        />
+        <div aria-hidden className="noise-overlay" />
+        <div aria-hidden className="page-rails" />
         {children}
       </body>
     </html>

@@ -6,7 +6,7 @@ export default function NotFound() {
     <PageShell>
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 px-4 text-center">
         <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">404</p>
-        <h1 className="font-serif text-2xl font-medium tracking-tight md:text-3xl">
+        <h1 className="text-2xl font-medium tracking-tight md:text-3xl">
           No clearing session here
         </h1>
         <p className="max-w-sm text-sm text-muted-foreground">

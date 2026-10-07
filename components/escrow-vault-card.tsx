@@ -38,26 +38,26 @@ export function EscrowVaultCard({
   }
 
   return (
-    <div className="rounded-[24px] border border-[#1F1F1F] bg-[#0A0A0A] p-6 sm:p-8 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#1F1F1F] pb-4">
+    <div className="rounded-[24px] border border-border bg-card p-6 sm:p-8 space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border pb-4">
         <div>
-          <span className="font-['JetBrains_Mono',monospace] text-xs uppercase tracking-wider text-[#C59A3F] block mb-1">
+          <span className="font-mono text-xs uppercase tracking-wider text-foreground block mb-1">
             Smart Contract Settlement
           </span>
-          <h3 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+          <h3 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-2">
             <span>Bilateral Escrow Vault</span>
-            <span className="text-xs font-normal text-[#94A3B8] font-['JetBrains_Mono',monospace]">
+            <span className="text-xs font-normal text-muted-foreground font-mono">
               ({backend === "arcium" ? "Solana Anchor Program" : "Monad EVM Contract"})
             </span>
           </h3>
         </div>
 
-        <div className="inline-flex items-center gap-2 rounded-full border border-[#1F1F1F] bg-[#141414] px-3 py-1 text-xs">
+        <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1 text-xs">
           <span className={`h-2 w-2 rounded-full ${
-            escrowState === "released" ? "bg-emerald-400" :
-            escrowState === "locked" ? "bg-[#E8C874]" : "bg-[#64748B]"
+            escrowState === "released" ? "bg-success" :
+            escrowState === "locked" ? "bg-foreground" : "bg-muted-foreground"
           }`} />
-          <span className="font-['JetBrains_Mono',monospace] text-[#94A3B8]">
+          <span className="font-mono text-muted-foreground">
             Status: {
               escrowState === "idle" ? "Awaiting Deposit" :
               escrowState === "depositing" ? "Confirming on-chain..." :
@@ -70,41 +70,41 @@ export function EscrowVaultCard({
       {/* Escrow Balances Matrix */}
       <div className="grid sm:grid-cols-2 gap-4">
         {/* Desk A Escrow */}
-        <div className="rounded-xl border border-[#1F1F1F] bg-[#111111] p-4 space-y-2">
+        <div className="rounded-xl border border-border bg-card p-4 space-y-2">
           <div className="flex justify-between items-center text-xs">
-            <span className="font-semibold text-white">Desk A Obligation</span>
-            <span className="text-emerald-400 font-['JetBrains_Mono',monospace]">
+            <span className="font-semibold text-foreground">Desk A Obligation</span>
+            <span className="text-success font-mono">
               Freed: +${deskASavings.toLocaleString()}
             </span>
           </div>
-          <div className="space-y-1 text-xs font-['JetBrains_Mono',monospace]">
-            <div className="flex justify-between text-[#94A3B8]">
+          <div className="space-y-1 text-xs font-mono">
+            <div className="flex justify-between text-muted-foreground">
               <span>Solo Siloed Margin:</span>
               <span className="line-through text-red-400">${siloedMarginA.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between text-white font-bold">
+            <div className="flex justify-between text-foreground font-bold">
               <span>Required Net Deposit:</span>
-              <span className="text-[#E8C874]">${halfNetMargin.toLocaleString()}</span>
+              <span className="text-foreground">${halfNetMargin.toLocaleString()}</span>
             </div>
           </div>
         </div>
 
         {/* Desk B Escrow */}
-        <div className="rounded-xl border border-[#1F1F1F] bg-[#111111] p-4 space-y-2">
+        <div className="rounded-xl border border-border bg-card p-4 space-y-2">
           <div className="flex justify-between items-center text-xs">
-            <span className="font-semibold text-white">Desk B Obligation</span>
-            <span className="text-emerald-400 font-['JetBrains_Mono',monospace]">
+            <span className="font-semibold text-foreground">Desk B Obligation</span>
+            <span className="text-success font-mono">
               Freed: +${deskBSavings.toLocaleString()}
             </span>
           </div>
-          <div className="space-y-1 text-xs font-['JetBrains_Mono',monospace]">
-            <div className="flex justify-between text-[#94A3B8]">
+          <div className="space-y-1 text-xs font-mono">
+            <div className="flex justify-between text-muted-foreground">
               <span>Solo Siloed Margin:</span>
               <span className="line-through text-red-400">${siloedMarginB.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between text-white font-bold">
+            <div className="flex justify-between text-foreground font-bold">
               <span>Required Net Deposit:</span>
-              <span className="text-[#E8C874]">${halfNetMargin.toLocaleString()}</span>
+              <span className="text-foreground">${halfNetMargin.toLocaleString()}</span>
             </div>
           </div>
         </div>
@@ -115,7 +115,7 @@ export function EscrowVaultCard({
         {escrowState === "idle" && (
           <button
             onClick={handleSimulateEscrow}
-            className="w-full flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#E8C874] via-[#C59A3F] to-[#A67C27] py-3.5 px-6 font-semibold text-black transition-all hover:scale-[1.01] active:scale-[0.99] shadow-md text-sm"
+            className="w-full flex items-center justify-center gap-2 rounded-full bg-primary py-3.5 px-6 font-semibold text-primary-foreground transition-colors duration-150 text-sm"
           >
             <Lock className="h-4 w-4" />
             <span>Deposit Net Margin to Escrow Vault (${netMargin.toLocaleString()} Total)</span>
@@ -123,7 +123,7 @@ export function EscrowVaultCard({
         )}
 
         {escrowState === "depositing" && (
-          <div className="w-full flex items-center justify-center gap-2 rounded-full border border-[#C59A3F]/40 bg-[#141414] py-3.5 px-6 text-sm text-[#E8C874]">
+          <div className="w-full flex items-center justify-center gap-2 rounded-full border border-border bg-secondary py-3.5 px-6 text-sm text-foreground">
             <span className="animate-spin inline-block h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
             <span>Broadcasting bilateral deposit transaction...</span>
           </div>
@@ -131,16 +131,16 @@ export function EscrowVaultCard({
 
         {escrowState === "locked" && (
           <div className="space-y-3">
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs text-emerald-300 space-y-1">
+            <div className="rounded-xl border border-success/30 bg-success/10 p-4 text-xs text-success space-y-1">
               <div className="flex items-center gap-2 font-bold">
-                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                <CheckCircle2 className="h-4 w-4 text-success" />
                 <span>Net Margin Secured in Escrow!</span>
               </div>
-              <p className="text-[#CBD5E1]">
+              <p className="text-foreground">
                 Both counterparties deposited ${halfNetMargin.toLocaleString()}. A total of ${savingsUsd.toLocaleString()} is verified as excess margin.
               </p>
               {txHash && (
-                <div className="pt-1 font-['JetBrains_Mono',monospace] text-[11px] text-[#94A3B8] break-all">
+                <div className="pt-1 font-mono text-[11px] text-muted-foreground break-all">
                   Escrow Tx: {txHash}
                 </div>
               )}
@@ -148,7 +148,7 @@ export function EscrowVaultCard({
 
             <button
               onClick={handleReleaseExcess}
-              className="w-full flex items-center justify-center gap-2 rounded-full bg-emerald-500 py-3.5 px-6 font-bold text-black hover:bg-emerald-400 transition-all text-sm shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+              className="w-full flex items-center justify-center gap-2 rounded-full bg-success py-3.5 px-6 font-bold text-primary-foreground hover:bg-success transition-colors duration-150 text-sm shadow-[0_0_20px_rgba(16,185,129,0.3)]"
             >
               <Unlock className="h-4 w-4" />
               <span>Claim &amp; Release Freed Capital (+${savingsUsd.toLocaleString()})</span>
@@ -157,15 +157,15 @@ export function EscrowVaultCard({
         )}
 
         {escrowState === "released" && (
-          <div className="rounded-xl border border-[#C59A3F]/40 bg-gradient-to-br from-[#17140E] to-[#0A0A0A] p-5 text-center space-y-2">
-            <Sparkles className="h-6 w-6 text-[#E8C874] mx-auto" />
-            <h4 className="text-base font-bold text-white">Settlement Complete!</h4>
-            <p className="text-xs text-[#94A3B8] max-w-md mx-auto">
+          <div className="rounded-xl border border-border p-5 text-center space-y-2">
+            <Sparkles className="h-6 w-6 text-foreground mx-auto" />
+            <h4 className="text-base font-bold text-foreground">Settlement Complete!</h4>
+            <p className="text-xs text-muted-foreground max-w-md mx-auto">
               ${savingsUsd.toLocaleString()} has been unlocked and credited back to the desks. Capital efficiency increased by {Math.round((savingsUsd / (siloedMarginA + siloedMarginB)) * 100)}%.
             </p>
             <button
               onClick={() => setEscrowState("idle")}
-              className="mt-2 text-xs text-[#C59A3F] hover:underline font-['JetBrains_Mono',monospace]"
+              className="mt-2 text-xs text-foreground hover:underline font-mono"
             >
               Reset Simulation
             </button>

@@ -1,68 +1,35 @@
 import Link from "next/link";
-import { LogoMark } from "@/components/logo-mark";
 import { ArrowUpRight } from "lucide-react";
+import { LogoMark } from "@/components/logo-mark";
+import { NavLinks } from "@/components/nav-links";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-50 border-b border-[#1F1F1F] bg-[#000000]/90 backdrop-blur-md">
-      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        {/* Far Left: Logo Mark + Gold Gradient Brand Name */}
+    <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-md">
+      <div className="mx-auto flex h-16 max-w-[1332px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <Link
           href="/"
-          className="flex items-center gap-3.5 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C59A3F]"
+          className="flex items-center gap-2.5 text-foreground transition-opacity duration-200 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          <LogoMark width={40} height={26} className="transition-transform duration-200 group-hover:scale-105" />
-          <span className="text-2xl font-semibold tracking-wide bg-gradient-to-br from-[#E8C874] via-[#C59A3F] to-[#A67C27] text-transparent bg-clip-text font-['Plus_Jakarta_Sans',sans-serif]">
-            Obligor
-          </span>
+          <LogoMark width={30} height={20} />
+          <span className="text-lg font-semibold tracking-[-0.02em]">Obligor</span>
         </Link>
 
-        {/* Right Side: Simple Muted Text Links & Launch Button */}
-        <nav className="flex items-center gap-6 md:gap-8">
-          <div className="hidden md:flex items-center gap-6 lg:gap-8 text-sm">
-            <Link
-              href="/clear"
-              className="text-[#94A3B8] transition-colors duration-150 hover:text-white font-medium"
-            >
-              Clearing
-            </Link>
-            <Link
-              href="/deal"
-              className="text-[#E8C874] font-semibold transition-colors duration-150 hover:text-white flex items-center gap-1"
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>P2P Deal Rooms</span>
-            </Link>
-            <Link
-              href="/monad"
-              className="text-[#94A3B8] transition-colors duration-150 hover:text-white font-medium"
-            >
-              Monad Parallel
-            </Link>
-            <Link
-              href="/agents"
-              className="text-[#94A3B8] transition-colors duration-150 hover:text-white font-medium"
-            >
-              Agents (x402)
-            </Link>
-            <Link
-              href="/trust"
-              className="text-[#94A3B8] transition-colors duration-150 hover:text-white font-medium"
-            >
-              Trust &amp; Honesty
-            </Link>
-          </div>
+        <div className="hidden md:flex">
+          <NavLinks />
+        </div>
 
-          <div className="flex items-center gap-3">
-            <Link
-              href="/clear"
-              className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#E8C874] via-[#C59A3F] to-[#A67C27] px-5 py-2 text-xs font-semibold text-black transition-transform duration-150 hover:scale-[1.02] active:scale-[0.98] shadow-[0_4px_20px_rgba(197,154,63,0.15)]"
-            >
-              Launch App
-              <ArrowUpRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
-        </nav>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Link
+            href="/clear"
+            className="btn-light inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            <span>Launch app</span>
+            <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+        </div>
       </div>
     </header>
   );

@@ -42,7 +42,7 @@ export default function AdversarialPage() {
       <PageShell>
         <div className="mx-auto max-w-xl py-10 text-center md:py-20">
           <ShieldAlert className="mx-auto h-10 w-10 text-destructive" aria-hidden />
-          <h1 className="mt-6 font-serif text-3xl font-medium tracking-tight md:text-4xl">
+          <h1 className="mt-6 text-3xl font-medium tracking-tight md:text-4xl">
             Plaintext operator view
           </h1>
           <p className="mt-4 text-sm leading-relaxed text-muted-foreground">

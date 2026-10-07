@@ -148,7 +148,7 @@ export function NettingCalculator() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Calculator className="h-4 w-4 text-primary" aria-hidden />
-          <h2 className="font-serif text-xl font-medium tracking-tight">Live netting calculator</h2>
+          <h2 className="text-xl font-medium tracking-tight">Live netting calculator</h2>
         </div>
         <span className="rounded-full border border-border px-3 py-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
           simulated · same formula as the sealed path

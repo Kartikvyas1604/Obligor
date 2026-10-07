@@ -25,7 +25,7 @@ export default function TrustPage() {
           <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
             Trust &amp; honesty
           </p>
-          <h1 className="mt-2 font-serif text-3xl font-medium tracking-tight md:text-4xl">
+          <h1 className="mt-2 text-3xl font-medium tracking-tight md:text-4xl">
             What is real, what is labeled
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
