@@ -19,6 +19,7 @@ import { WalletConnect } from "@/components/wallet-connect";
 import { EscrowVaultCard } from "@/components/escrow-vault-card";
 import { PositionBuilderModal } from "@/components/position-builder-modal";
 import { type BackendKind, type PositionBook, type PositionLeg, type PartyId } from "@/lib/margin";
+import { getConfidentialBackend } from "@/lib/confidential";
 
 const STAGES_SOLANA = [
   "Sealing Party A legs",
@@ -257,6 +258,17 @@ export default function ClearPage() {
         }
       } catch {
         setApiError("Network error contacting the clearing API");
+      }
+    } else {
+      // In-browser netting: runs the exact same formula via the selected
+      // confidential backend (MPC/TEE/simulated label is displayed).
+      try {
+        const backendInstance = getConfidentialBackend(backend);
+        const res = await backendInstance.netTwoParty(bookA, bookB);
+        setApiComputationId(res.computationId);
+        setApiAttestation(res.attestation?.quote || null);
+      } catch {
+        setApiError("Local netting failed — check the position books and retry.");
       }
     }
 
