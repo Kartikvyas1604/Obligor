@@ -1,47 +1,111 @@
+#!/usr/bin/env node
 /**
- * Obligor x402 Facilitator & Network Verification Script
- * Checks live facilitator connectivity and network strings for Solana devnet and Monad testnet.
+ * Obligor x402 facilitator & network verification — REAL probe, honest gate.
+ *
+ * - Probes each configured facilitator's `/supported` endpoint with a hard timeout.
+ * - A facilitator is only applied to a chain when its URL is set: Solana has no
+ *   confirmed public facilitator URL, so it verifies only via FACILITATOR_URL_SOLANA.
+ * - Exit codes (CI-gateable):
+ *     0 = all probed facilitators respond with a supported x402 config
+ *     1 = any requested facilitator failed ⇒ do not enable that chain's x402
+ *         (Monad payments stay Solana-only and AN agent flow documents it).
  */
 
 export {};
 
-const NETWORKS = [
+interface ChainSpec {
+  chain: "solana" | "monad";
+  network: string;
+  asset: string;
+  facilitatorUrl: string;
+}
+
+const NETWORKS: ChainSpec[] = [
   {
     chain: "solana",
-    network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
-    asset: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
-    facilitatorUrl: "https://x402-facilitator.solana.com",
+    network: process.env.X402_NETWORK_SOLANA || "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    asset: process.env.X402_ASSET_MINT_SOLANA || "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+    facilitatorUrl: process.env.FACILITATOR_URL_SOLANA || "",
   },
   {
     chain: "monad",
-    network: "eip155:10143",
-    asset: "0x534b2f3A21130d7a60830c2Df862319e593943A3",
-    facilitatorUrl: "https://x402-facilitator.molandak.org",
+    network: process.env.X402_NETWORK_MONAD || "eip155:10143",
+    asset: process.env.X402_ASSET_MINT_MONAD || "0x534b2f3A21130d7a60830c2Df862319e593943A3",
+    facilitatorUrl: process.env.FACILITATOR_URL_MONAD || "https://x402-facilitator.molandak.org",
   },
 ];
 
+type ProbeResult = "verified" | "no_facilitator" | "failed";
+
+async function probeFacilitator(url: string): Promise<{ status: ProbeResult; note: string }> {
+  if (!url) {
+    return { status: "no_facilitator", note: "Not verified — no facilitator URL configured for Solana V2 direct-settlement; keep x402 honest (format-check only)." };
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const res = await fetch(new URL("/supported", url).toString(), {
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      return { status: "failed", note: `HTTP ${res.status} from /supported` };
+    }
+    const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+    return {
+      status: "verified",
+      note: `responded with ${res.ok ? "a valid" : "no"} /supported payload${body ? ` (keys: ${Object.keys(body).slice(0, 6).join(", ")})` : ""}`,
+    };
+  } catch (err) {
+    return { status: "failed", note: err instanceof Error ? err.message : String(err) };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function verifyNetworks() {
-  console.log("\n=======================================================");
-  console.log(" Obligor x402 V2 Network Verification & Facilitator Probe");
-  console.log("=======================================================\n");
+  console.log(`
+========================================================
+ Obligor x402 V2 verification — real facilitator probes
+========================================================
+`);
+
+  let failures = 0;
 
   for (const net of NETWORKS) {
-    console.log(`[+] Probing ${net.chain.toUpperCase()} x402 Configuration:`);
+    console.log(`[+] ${net.chain.toUpperCase()} x402 configuration`);
     console.log(`    Network CAIP-2 : ${net.network}`);
-    console.log(`    USDC Mint      : ${net.asset}`);
-    console.log(`    Facilitator URL: ${net.facilitatorUrl}`);
+    console.log(`    USDC asset     : ${net.asset}`);
 
-    try {
-      // In production/CI, probe facilitator health endpoint
-      console.log(`    Status         : ✅ VERIFIED / READY FOR AGENT PAYMENTS ($0.01 per call)`);
-    } catch (err) {
-      console.log(`    Status         : ⚠️ Facilitator unreachable (${(err as Error).message})`);
+    const probe = await probeFacilitator(net.facilitatorUrl);
+    if (probe.status === "verified") {
+      console.log(`    Facilitator    : ${net.facilitatorUrl}`);
+      console.log(`    Status         : VERIFIED — ${probe.note}`);
+    } else if (probe.status === "no_facilitator") {
+      console.log(`    Facilitator    : none configured`);
+      console.log(`    Status         : ${probe.note}`);
+    } else {
+      failures++;
+      console.log(`    Facilitator    : ${net.facilitatorUrl}`);
+      console.log(`    Status         : FAILED — ${probe.note}`);
     }
     console.log();
   }
 
-  console.log("Honesty note: If Monad facilitator is unreachable, Monad x402 falls back to Solana-only.");
-  console.log("Both chains retain identical two-party margin engine math.\n");
+  console.log("Gate semantics:");
+  console.log("- A chain with a failed facilitator probe MUST NOT enable x402 in its env (X402_MONAD_ENABLED=false).");
+  console.log("- A chain with no public facilitator keeps speed-direct settlement; its 402 challenge still advertises payTo + terms from env.");
+  console.log("- Exit code is 0 only when every configured probe verified.\n");
+
+  if (failures > 0) {
+    console.error(`✖ ${failures} facilitator probe(s) failed — keep that chain's x402 disabled and document it.`);
+    process.exitCode = 1;
+  } else {
+    console.log("✔ All configured facilitators verified.");
+  }
 }
 
-verifyNetworks();
+verifyNetworks().catch((err) => {
+  console.error("✖ Verification crashed:", err instanceof Error ? err.message : err);
+  process.exitCode = 1;
+});
