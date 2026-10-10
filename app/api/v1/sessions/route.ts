@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { parseBody, rateLimitFor, readJsonBody, withApi } from "@/lib/http";
-import { createDealSession } from "@/lib/deal-session";
+import {
+  createDealSession,
+  hashPartyToken,
+  issuePartyToken,
+  publicSession,
+  saveSession,
+} from "@/lib/deal-session";
 import { priceAndNormalizeLegs } from "@/lib/positions";
 import { backendKindSchema, walletSchema } from "@/lib/contracts";
 
@@ -27,10 +33,16 @@ export const POST = withApi(async ({ req }) => {
 
   const session = createDealSession(body.walletA, body.labelA, legs ?? [], body.backend ?? "arcium");
 
+  // Party A's capability token: returned exactly once, only its hash stored.
+  const partyTokenA = issuePartyToken();
+  session.partyTokenHashes = { A: hashPartyToken(partyTokenA) };
+  saveSession(session);
+
   return NextResponse.json(
     {
       ok: true,
-      session,
+      session: publicSession(session, { A: true, B: false }),
+      partyTokenA,
       warnings,
     },
     { status: 201 },

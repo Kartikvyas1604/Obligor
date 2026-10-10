@@ -85,6 +85,10 @@ const envSchema = z.object({
     monadPayTo: z.string().optional().default(""),
     facilitatorUrlSolana: z.string().optional().default(""),
     facilitatorUrlMonad: z.string().optional().default(""),
+    // Receipt verification is wired when the @x402 SDK lands. Until then an
+    // unverified receipt header is accepted ONLY under this explicit escape
+    // hatch (dev default ON like the demo flags, locked OFF in production).
+    acceptUnverifiedSignatures: boolish(!isProdBuild),
   }),
 
   positions: z.object({
@@ -134,6 +138,7 @@ function load(): Env {
       monadPayTo: process.env.MONAD_PAY_TO,
       facilitatorUrlSolana: process.env.FACILITATOR_URL_SOLANA,
       facilitatorUrlMonad: process.env.FACILITATOR_URL_MONAD,
+      acceptUnverifiedSignatures: process.env.X402_ACCEPT_UNVERIFIED_SIGNATURES,
     },
     positions: {
       haircutSpot: process.env.POSITION_HAIRCUT_SPOT,
@@ -162,6 +167,11 @@ function load(): Env {
     }
     if (cfg.demo.allowUnpaid) {
       log.warn("DEMO_ALLOW_UNPAID is enabled in production — the clearing API will not enforce payment");
+    }
+    if (cfg.x402.acceptUnverifiedSignatures) {
+      log.warn(
+        "X402_ACCEPT_UNVERIFIED_SIGNATURES is enabled in production — x402 receipts are NOT cryptographically verified and any well-formed header clears payment",
+      );
     }
     if (cfg.store.mode === "memory") {
       log.warn("SESSION_STORE_MODE=memory in production — deal rooms are lost on restart and not shared across instances");

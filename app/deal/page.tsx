@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Users, ArrowRight } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { WalletConnect } from "@/components/wallet-connect";
+import { setPartyTokens } from "@/lib/client-party-tokens";
 import { type BackendKind } from "@/lib/margin";
 
 export default function DealLauncherPage() {
@@ -34,6 +35,8 @@ export default function DealLauncherPage() {
       });
       if (res.ok) {
         const data = await res.json();
+        // Capability token for Desk A — kept in memory only, never stored.
+        setPartyTokens(data.session.sessionId, { A: data.partyTokenA });
         router.push(`/deal/${data.session.sessionId}`);
         return;
       }

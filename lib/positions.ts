@@ -16,6 +16,7 @@ import { env } from "./env";
 import { fetchLivePythPrice, type OraclePrice } from "./adapters/pyth";
 import { BUCKET_ORACLE_SYMBOL } from "./adapters/venues";
 import { makeLogger } from "./logger";
+import { ApiError } from "./http";
 
 const log = makeLogger("positions");
 
@@ -113,7 +114,20 @@ export async function priceAndNormalizeLegs(
   rawLegs: unknown,
   options: PriceOptions,
 ): Promise<PricedBook> {
-  const input = rawLegsSchema.parse(rawLegs);
+  const parsed = rawLegsSchema.safeParse(rawLegs);
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map((i) => ({
+      path: i.path.join("."),
+      message: i.message,
+    }));
+    throw new ApiError(
+      422,
+      "VALIDATION_FAILED",
+      issues[0] ? `${issues[0].path}: ${issues[0].message}` : "Invalid desk-supplied legs",
+      issues,
+    );
+  }
+  const input = parsed.data;
 
   const warnings: string[] = [];
   const legs: PositionLeg[] = [];
@@ -170,11 +184,17 @@ export async function priceAndNormalizeLegs(
     const notionalUsd = Math.round(leg.qty * markUsd * 100) / 100;
 
     if (!Number.isFinite(notionalUsd) || notionalUsd <= 0) {
-      throw new Error(`INVALID_LEG: ${leg.instrument} produced a non-positive notional`);
+      throw new ApiError(
+        422,
+        "VALIDATION_FAILED",
+        `${leg.instrument} produced a non-positive notional (${notionalUsd} USD)`,
+      );
     }
     if (notionalUsd > env.positions.maxNotionalPerLegUsd) {
-      throw new Error(
-        `LIMIT_EXCEEDED: ${leg.instrument} notional ${notionalUsd} exceeds the ${env.positions.maxNotionalPerLegUsd} cap`,
+      throw new ApiError(
+        422,
+        "LIMIT_EXCEEDED",
+        `${leg.instrument} notional ${notionalUsd} exceeds the ${env.positions.maxNotionalPerLegUsd} USD cap`,
       );
     }
 

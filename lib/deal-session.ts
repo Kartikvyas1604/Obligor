@@ -4,7 +4,7 @@
  * the route boundary. Every mutation stamps updatedAt for TTL eviction.
  */
 
-import { type PositionBook, type PositionLeg, twoPartySiloed, type BackendKind } from "@/lib/margin";
+import { type PositionBook, type PositionLeg, twoPartySiloed, type BackendKind, type PartyId } from "@/lib/margin";
 import { type ConfidentialNetMarginResult } from "@/lib/confidential";
 import { getConfidentialBackend } from "@/lib/confidential";
 import { sessionStore } from "@/lib/session-store";
@@ -28,6 +28,8 @@ export interface SessionParty {
   isSealed: boolean;
   signature?: string;
   depositedAmountUsd: number;
+  /** Server-side marker: the caller was NOT authorized for this party's book. */
+  legsWithheld?: boolean;
 }
 
 export interface DealSession {
@@ -44,12 +46,85 @@ export interface DealSession {
   siloedCombinedUsd: number | null;
   escrowTxHash: string | null;
   attestationQuote: string | null;
+  /**
+   * INTERNAL — SHA-256 hashes of each party's capability token. Hashes are
+   * stored (verifiable), the raw tokens are only ever returned once at
+   * create/join and never persisted or serialized.
+   */
+  partyTokenHashes?: { A?: string; B?: string };
 }
 
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 export function generateSessionId(): string {
   return `0x${randomBytes(16).toString("hex")}`;
+}
+
+/** Fresh capability token for one desk (32 random bytes, base64url). */
+export function issuePartyToken(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+/** One-way hash of a party token — the only form persisted. */
+export function hashPartyToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+/**
+ * Constant-time check that `token` authorizes `party` on `session`. A
+ * session with no stored hash for that party (e.g. pre-upgrade) denies.
+ */
+export function verifyPartyToken(
+  session: DealSession,
+  party: PartyId,
+  token: string | null | undefined,
+): boolean {
+  if (!token) return false;
+  const expected = session.partyTokenHashes?.[party];
+  if (!expected) return false;
+  const actual = hashPartyToken(token);
+  const a = Buffer.from(actual, "utf8");
+  const b = Buffer.from(expected, "utf8");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** Namespace the JSON-serialized session excludes token hashes. */
+export type PublicSession = Omit<DealSession, "partyTokenHashes">;
+
+/**
+ * Clone a session for a caller with the given authorizations. A party's
+ * plaintext legs are withheld (empty + legsWithheld flag) unless their token
+ * was presented. Token hashes never leave the server.
+ */
+export function publicSession(
+  session: DealSession,
+  authorized: { A: boolean; B: boolean },
+): PublicSession {
+  const copy = structuredClone(session) as PublicSession;
+  delete (copy as { partyTokenHashes?: unknown }).partyTokenHashes;
+  if (copy.partyA && !authorized.A) {
+    copy.partyA.legs = [];
+    copy.partyA.legsWithheld = true;
+  }
+  if (copy.partyB && !authorized.B) {
+    copy.partyB.legs = [];
+    copy.partyB.legsWithheld = true;
+  }
+  return copy;
+}
+
+/** Evaluate which parties a (possibly comma-separated) token header authorizes. */
+export function authorizedParties(
+  session: DealSession,
+  header: string | null,
+): { A: boolean; B: boolean } {
+  const out: { A: boolean; B: boolean } = { A: false, B: false };
+  if (!header) return out;
+  for (const token of header.split(",").map((t) => t.trim())) {
+    if (token && verifyPartyToken(session, "A", token)) out.A = true;
+    if (token && verifyPartyToken(session, "B", token)) out.B = true;
+  }
+  return out;
 }
 
 export function createDealSession(

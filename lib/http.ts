@@ -28,6 +28,11 @@ export class ApiError extends Error {
   static badRequest(message: string, details?: unknown) {
     return new ApiError(400, "BAD_REQUEST", message, details);
   }
+  static unauthorized(
+    message = "This action requires the acting desk's session token — the room link alone is not enough to act as either party",
+  ) {
+    return new ApiError(401, "UNAUTHORIZED", message);
+  }
   static notFound(message = "Not found") {
     return new ApiError(404, "NOT_FOUND", message);
   }

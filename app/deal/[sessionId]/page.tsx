@@ -8,6 +8,7 @@ import { MarginHero } from "@/components/margin-hero";
 import { PositionBuilderModal } from "@/components/position-builder-modal";
 import { EscrowVaultCard } from "@/components/escrow-vault-card";
 import { ExposureBars } from "@/components/charts";
+import { getPartyTokens, setPartyTokens } from "@/lib/client-party-tokens";
 import { type DealSession } from "@/lib/deal-session";
 import { type PositionLeg, type PartyId, usd, siloedIm } from "@/lib/margin";
 
@@ -23,6 +24,10 @@ function truncate(addr: string, len = 6) {
   return `${addr.slice(0, len)}...${addr.slice(-len)}`;
 }
 
+function partyHeaders(extra?: Partial<Record<string, string>>): HeadersInit {
+  return { "Content-Type": "application/json", ...(extra ?? {}) };
+}
+
 export default function LiveDealPage({
   params,
 }: {
@@ -31,7 +36,10 @@ export default function LiveDealPage({
   const { sessionId } = use(params);
   const [session, setSession] = useState<DealSession | null>(null);
   const [loading, setLoading] = useState(true);
-  const [myRole, setMyRole] = useState<"A" | "B">("A");
+  const [myRole, setMyRole] = useState<"A" | "B">(() => {
+    const t = getPartyTokens(sessionId);
+    return t.B ? "B" : "A";
+  });
   const [copiedLink, setCopiedLink] = useState(false);
   const [builderOpen, setBuilderOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
@@ -39,13 +47,18 @@ export default function LiveDealPage({
   const [sealError, setSealError] = useState<string | null>(null);
   const [clearError, setClearError] = useState<string | null>(null);
 
-  // Poll session every 1.5 seconds for true real-time multi-device sync
+  // Poll session every 1.5 seconds for true real-time multi-device sync.
+  // The request presents this desk's capability token; without it the server
+  // withholds the other side's plaintext book (confidentiality promise).
   useEffect(() => {
     let active = true;
 
     async function fetchSession() {
       try {
-        const res = await fetch(`/api/v1/sessions/${sessionId}`);
+        const token = getPartyTokens(sessionId)[myRole];
+        const res = await fetch(`/api/v1/sessions/${sessionId}`, {
+          headers: token ? { "x-party-token": token } : undefined,
+        });
         if (res.ok) {
           const data = await res.json();
           if (active && data.session) {
@@ -65,14 +78,14 @@ export default function LiveDealPage({
       active = false;
       clearInterval(interval);
     };
-  }, [sessionId]);
+  }, [sessionId, myRole]);
 
   async function handleJoinAsPartyB() {
     setActionBusy(true);
     try {
       const res = await fetch(`/api/v1/sessions/${sessionId}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: partyHeaders(),
         body: JSON.stringify({
           action: "join",
           // Simulated guest gets a runtime-generated demo wallet; its book
@@ -84,6 +97,8 @@ export default function LiveDealPage({
       });
       if (res.ok) {
         const data = await res.json();
+        // Desk B capability token — memory only, never persisted.
+        setPartyTokens(sessionId, { B: data.partyTokenB });
         setSession(data.session);
         setMyRole("B");
       } else {
@@ -99,10 +114,11 @@ export default function LiveDealPage({
     if (!session) return;
     const currentLegs = myRole === "A" ? session.partyA.legs : session.partyB?.legs || [];
     const updatedLegs = [...currentLegs, { ...newLeg, party: myRole }];
+    const token = getPartyTokens(sessionId)[myRole];
 
     await fetch(`/api/v1/sessions/${sessionId}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: partyHeaders(token ? { "x-party-token": token } : undefined),
       body: JSON.stringify({
         action: "update_legs",
         partyId: myRole,
@@ -115,10 +131,11 @@ export default function LiveDealPage({
     if (!session) return;
     const currentLegs = myRole === "A" ? session.partyA.legs : session.partyB?.legs || [];
     const updatedLegs = currentLegs.filter((_, i) => i !== index);
+    const token = getPartyTokens(sessionId)[myRole];
 
     await fetch(`/api/v1/sessions/${sessionId}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: partyHeaders(token ? { "x-party-token": token } : undefined),
       body: JSON.stringify({
         action: "update_legs",
         partyId: myRole,
@@ -138,9 +155,10 @@ export default function LiveDealPage({
         new TextEncoder().encode(JSON.stringify(myParty?.legs ?? [])),
       );
       const signature = "sig_" + Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+      const token = getPartyTokens(sessionId)[myRole];
       const res = await fetch(`/api/v1/sessions/${sessionId}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: partyHeaders(token ? { "x-party-token": token } : undefined),
         body: JSON.stringify({ action: "seal", partyId: myRole, signature }),
       });
       if (!res.ok) {
@@ -158,9 +176,12 @@ export default function LiveDealPage({
     setActionBusy(true);
     setClearError(null);
     try {
+      // Clearing consumes both sealed books — send both desks' tokens.
+      const { A, B } = getPartyTokens(sessionId);
+      const both = [A, B].filter(Boolean).join(",");
       const res = await fetch(`/api/v1/sessions/${sessionId}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: partyHeaders(both ? { "x-party-token": both } : undefined),
         body: JSON.stringify({ action: "clear" }),
       });
       if (!res.ok) {
@@ -205,9 +226,6 @@ export default function LiveDealPage({
   }
 
   const myParty = myRole === "A" ? session.partyA : session.partyB;
-  const otherParty = myRole === "A" ? session.partyB : session.partyA;
-  const myIm = myParty ? siloedIm(myParty.legs) : 0;
-  const otherIm = otherParty ? siloedIm(otherParty.legs) : 0;
 
   return (
     <PageShell>
@@ -354,6 +372,13 @@ export default function LiveDealPage({
                         Join as Desk {role}
                       </button>
                     </div>
+                  ) : party?.legsWithheld ? (
+                    <div className="py-8 text-center text-xs text-muted-foreground">
+                      <span className="inline-flex items-center justify-center gap-1.5">
+                        <Lock className="h-3.5 w-3.5" aria-hidden />
+                        Desk {role}&rsquo;s book is confidential — it is never shown to the other side.
+                      </span>
+                    </div>
                   ) : legs.length === 0 ? (
                     <div className="py-8 text-center text-xs text-muted-foreground">
                       {isMe ? "Add your first position to get started." : "This desk has no positions."}
@@ -398,7 +423,11 @@ export default function LiveDealPage({
                 {party && (
                   <div className="border-t border-border pt-3 flex justify-between items-center text-xs">
                     <span className="text-muted-foreground">Margin held alone (siloed):</span>
-                    <span className="font-mono font-bold text-foreground text-sm">{usd(siloedIm(party.legs))}</span>
+                    {party.legsWithheld ? (
+                      <span className="font-mono font-bold text-foreground text-sm">—</span>
+                    ) : (
+                      <span className="font-mono font-bold text-foreground text-sm">{usd(siloedIm(party.legs))}</span>
+                    )}
                   </div>
                 )}
               </div>
@@ -474,8 +503,8 @@ export default function LiveDealPage({
             />
 
             <EscrowVaultCard
-              siloedMarginA={myIm}
-              siloedMarginB={otherIm}
+              siloedMarginA={session.result.siloedAUsd}
+              siloedMarginB={session.result.siloedBUsd}
               netMargin={session.result.nettedCombinedUsd}
               savingsUsd={session.result.savingsUsd}
               backend={session.backend}
