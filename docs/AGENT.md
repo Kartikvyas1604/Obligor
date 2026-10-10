@@ -140,6 +140,14 @@ Max three load-bearing partners. Do not spray sponsor logos. **Replace “two bu
 16. Spend-cap / policy wrappers for production agent keys beyond disposable demo keys.
 17. Real xStocks/Backed RO adapter replacing mock `tAAPL` price — only if free and labeled.
 
+### Judge-win additions (Oct 10–12 — build these first when Colosseum E2E is green)
+
+- **J1 — Real Drift read-only adapter.** `lib/adapters/drift.ts` fetches a real subaccount's spot+perp `PositionBook` from Drift's public API (mainnet read-only, `source: "live"`) and feeds `twoPartyNetted` with a **real** book; fixtures allowed only for the counterparty. Honest framing: real books, virtual netting, simulated settlement.
+- **J2 — Verifiable output end-to-end.** `/v1/net-margin` emits `commitmentHash` (= `sha256(canonical(sealedInputs) + computationId + backendKind)`); `/v1/net-margin/verify` re-derives the net from the caller's own inputs and returns `verified: boolean` **without revealing the other side's book**.
+- **J3 — N=3 netting demo.** `packages/margin` gains N-party netting (N≥2; two-party is the N=2 case, one formula — no fork). `/v1/net-margin/multi` accepts 3 parties; UI shows a three-desk cycle (A↔B↔C) collapsing to one residual — the network-effects visual before the network exists.
+- **J4 — Agent negotiation + auto-settle.** `demo-agent-a` / `demo-agent-b` negotiate: request quote (402 → pay $0.01 → 200), exchange signed agreement, then **both sign** the escrow settle instruction — on-screen `agreed → settled`.
+- **J5 — "Try to break it" security page.** `/security` page + `GET /v1/security/self-audit` document fail-closed x402, per-desk capability tokens (sha256 at rest), 422 validation, no cross-party position leakage, rate limits, and clone-paste probe commands a judge can run to verify.
+
 ### Explicitly NOT building
 
 - Real securities exchange or RWA custody; Robinhood product.
@@ -228,6 +236,7 @@ export interface NetMarginResult {
   backend: BackendKind;
   trustModel: "cryptographic_mpc" | "hardware_attested_tee" | "simulated_plaintext_compute";
   computationId?: string;
+  commitmentHash?: string;   // sha256(canonical(sealedInputs, computationId, backendKind))
   attestation?: {
     quote?: string;          // Nitro/Oyster attestation blob or hash
     verified: boolean;       // true only if verification ran
@@ -263,7 +272,7 @@ export interface ConfidentialBackend {
 | TEE | AWS Nitro Enclaves **or** Marlin Oyster | [Marlin Oyster](https://www.marlin.org/oyster); Nitro attestation docs. Pick one in days 1–2 spike. **Enclave code: Rust.** |
 | Confidential pkg | `packages/confidential` — interface + arcium + enclave + simulated | Same output schema |
 | Margin formula | `packages/margin` — pure TS; mirrored in Arcis + enclave Rust | Shared golden fixtures |
-| Solana perps | **Drift** `@drift-labs/sdk` | |
+| Solana perps | **Drift** `@drift-labs/sdk` — read-only **live** subaccount fetch (mainnet RO, `source: "live"`) + fixture path | Drift public RPC + subaccount pk; **J1** |
 | Solana lending | **Kamino Lend** `@kamino-finance/klend-sdk` | [Kamino Build](https://kamino.com/docs/build) |
 | Monad readers | One venue adapter **or** labeled fixtures | Honesty > empty RPC heroics |
 | Payments | **x402 V2** `@x402/core`, `@x402/express`, `@x402/svm`, `@x402/evm`, `@x402/fetch` | Solana: [guide](https://solana.com/docs/payments/agentic-payments/x402). Monad: [docs.monad.xyz/guides/x402](https://docs.monad.xyz/guides/x402) — verify `/supported` before wiring |
@@ -351,6 +360,8 @@ interface TwoPartySession {
   partyB: PositionBook;
   backend: BackendKind;
   mode: "confidential" | "adversarial_plaintext";
+  computationId?: string;     // set once a net-margin runs
+  commitmentHash?: string;    // sha256(canonical(sealedInputs, computationId, backendKind))
 }
 ```
 
@@ -425,7 +436,7 @@ This is intentionally legible for judges: offsetting A long + B short in the sam
 | x402 Solana | **Real** V2 on **devnet USDC**; two independent agent scripts |
 | x402 Monad | **Real** only if facilitator `/supported` + testnet USDC verify; else Solana-only + honest docs |
 | Adversarial counterfactual | **Demo-only** plaintext mode; never the default confidential path |
-| Liquidation / capital release | **Not built** — numbers only; no withdraw from venues |
+| Liquidation / capital release | **Demo-scaffolded only** — escrow envelope → settlement lifecycle built (deposit → net → settle); no real custody, no venue withdrawal |
 | Confidential haircut table in-circuit | **Stretch** |
 | Options venue | **Out of MVP** |
 | Ethereum / Aave / Morpho | **Pitch only** |
@@ -530,6 +541,72 @@ If Monad facilitator check fails at boot, `/health.chains.monad.x402=false` and 
 
 **Privacy rule (hard):** confidential response must **not** echo per-leg plaintext for either party. `bookSummary` stays aggregate. Full legs appear only: (a) in each party’s own local UI session for their own book, or (b) in explicit adversarial demo endpoint.
 
+#### `POST /v1/net-margin/verify`  **[judge win — verifiable output]**
+
+Take the caller's **own** inputs + a `computationId`(+`commitmentHash`), re-run the **same deterministic formula** locally on the server, and compare to the recorded commitment:
+
+```json
+{
+  "sessionId": "...",
+  "computationId": "...",
+  "commitmentHash": "sha256:...",
+  "legsOverride": null
+}
+```
+
+Returns:
+
+```json
+{
+  "verified": true,
+  "recomputedNet": 7200,
+  "recomputedHash": "sha256:...",
+  "hashMatch": true
+}
+```
+
+**Privacy rule (hard):** this endpoint recomputes only from the caller's own legs + the immutable commitment; it never returns the other party's legs. This answers the judge's "how do I trust the 7200?" without revealing B's book.
+
+#### `POST /v1/net-margin/multi`  **[judge win — N=3 netting]**
+
+N-party netting (N≥3 demo). Same formula as two-party but N books bucketed together:
+
+```json
+{
+  "chain": "solana",
+  "backend": "arcium",
+  "parties": [
+    { "party": "A", "wallet": "...", "legsOverride": null },
+    { "party": "B", "wallet": "...", "legsOverride": null },
+    { "party": "C", "wallet": "...", "legsOverride": null }
+  ],
+  "sessionId": "<optional uuid>"
+}
+```
+
+Returns per-party siloed, combined siloed, combined netted across all N, savings, plus the per-bucket collapse table (gross → net per risk factor) — the two-party result is the N=2 special case, **same `packages/margin` function, no fork**.
+
+#### `GET /v1/security/self-audit`  **[judge win — "try to break it" surface]**
+
+Returns structured facts a judge can re-verify:
+
+```json
+{
+  "checks": [
+    { "id": "x402_gate", "status": "pass", "detail": "net-margin returns 402 without PAYMENT-SIGNATURE" },
+    { "id": "capability_tokens", "status": "pass", "detail": "32-byte, only sha256 at rest, timing-safe compare" },
+    { "id": "no_empty_sessions", "status": "pass", "detail": "header omitted/split broken → 401, never empty party" },
+    { "id": "no_leg_leak", "status": "pass", "detail": "confidential response omits legs by TypeScript DTO" },
+    { "id": "hsts", "status": "pass", "detail": "Strict-Transport-Security on all responses" },
+    { "id": "seedless", "status": "pass", "detail": "demo keys are disposable, none committed" }
+  ],
+  "probeCommands": [
+    "curl -i -X POST :4021/v1/net-margin -H 'content-type: application/json' -d '{...}' # expect 402",
+    "curl -i -H 'PAYMENT-SIGNATURE: dummy' ... # expect 402 (invalid sig), not 200"
+  ]
+}
+```
+
 #### `POST /v1/net-margin/parallel`  **(Monad; x402-gated if Monad x402 live)**
 
 ```json
@@ -553,6 +630,10 @@ Returns **both** books in plaintext plus annotation payload for the counterfactu
 #### `POST /v1/demo/fixture-two-party`
 
 Dev-only. Seeds known offsetting books for A and B (e.g. A: Kamino SOL lend + tAAPL; B: Drift SOL-PERP short).
+
+#### `POST /v1/demo/fixture-three-party`  **[judge win — N=3]**
+
+Dev-only. Seeds three offsetting books for A, B, C that form a netting cycle (e.g. A long SOL, B short SOL, C long tAAPL / short other-bucket) so `/v1/net-margin/multi` shows gross collapsing to a single residual.
 
 #### `POST /v1/demo/fixture-parallel-pairs`
 
@@ -676,6 +757,13 @@ NEXT_PUBLIC_DEFAULT_CHAIN=solana
 | Confidential Monad path | Attested enclave running same formula; trust model labeled TEE not MPC |
 | Parallel multi-pair | Monad judge sees **N≥3** pairs concurrently |
 | Adversarial counterfactual | Screen ships and is in **both** Demo Laws |
+| Verifiable output | Commitment hash + `computationId` (+ attestation where real) displayed beside the net result — “verify our math without revealing our inputs” |
+| **J1 Live Drift leg** | ≥1 leg `source: "live"` (Drift mainnet read-only) on camera |
+| **J2 Verify chip** | `/v1/net-margin/verify` → `verified: true` round-trip in one beat |
+| **J3 N=3 netting** | `/v1/net-margin/multi` nets three desks to one residual on camera |
+| **J4 Agent negotiation** | Both agents 402 → paid 200 → same net → settle (“agreed → settled”) |
+| **J5 Security self-audit** | `/v1/security/self-audit` + `/security` page render all guards pass |
+| Capital-release minute | Escrow → settle demo on camera (both desks lock, netted amount released) — turns a number into a transaction |
 | x402 Solana | ≥1 successful paid call on camera; **ideally two independent agents** |
 | x402 Monad | Live if verified; else documented Solana-only — no silent fake |
 | Sink questions | Rehearsed: “Why MPC?” (two-party mutual distrust) and “Why TEE on Monad?” (strongest honest backend + parallel clearing) |
@@ -757,10 +845,11 @@ Calendar anchor: **Sun Sep 27 → Mon Oct 13, 2026**. Colosseum **Oct 12**; Mona
 - Sink-question drills: why MPC? why TEE≠MPC? why parallel on Monad?
 - Timing ≤4 min each. Cut anything that breaks either story.
 
-### Days 13–14 (Oct 10–11): Videos, honesty tables, submit prep
+### Days 13–14 (Oct 10–11): Judge-win features, videos, honesty tables, submit prep
 
+- **Build the five J-features in §15 steps 22–27 in impact order: J1 (live Drift leg) → J2 (verify) → J4 (agent negotiation) → J3 (N=3) → J5 (security self-audit).** Each is small; ship any that are green by Oct 11 noon. J1+J2 alone lift the demo materially.
 - Record two videos (or one split clearly).
-- Two **real-vs-mocked** tables (Solana table + Monad table) in README.
+- Two **real-vs-mocked** tables (Solana table + Monad table) in README — now include `Drift leg = real`, `verify = real commitment`, `N=3 = real formula`.
 - TEE≠MPC paragraph + business-model honesty + production-still-needs.
 - OSS license, `.env.example`, attestation notes.
 
@@ -812,6 +901,31 @@ Imperative. Follow in order. **Two-party everywhere. Pluggable backend everywher
 20. **Record** both Demo Laws; cut anything that breaks the 4-minute stories.
 21. **Refuse** any PR that (a) reintroduces single-wallet-only netting as the product, (b) labels TEE as MPC, (c) ships Monad as a solitary-pair costume port, or (d) prioritizes Monad over a red Solana path after day 9.
 
+### Judge-win build steps (after steps 1–21 green; order = impact)
+
+22. **J1 — live Drift adapter.** Implement `packages/positions/src/adapters/drift.ts` (or `lib/adapters/drift.ts`):
+    - Use `@drift-labs/sdk` (or Drift public REST/gRPC) read-only to fetch a configured subaccount's active spot + perp positions from **mainnet**.
+    - Map each position → `PositionLeg` with `source: "live"`, `venue: "drift"`, correct `side`/`signedExposureUsd`, `haircut: 0.15` (perp) / `0.10` (spot collateral).
+    - `.env`: `DRIFT_SUBACCOUNT_ID` + `DEMO_PARTY_A_WALLET` (or subaccount authority pk). Failure must degrade loudly (warning in `PositionBook.warnings`), **never** silently fall to fixtures.
+    - This makes the "one leg is real" claim literally true for judge demo: `fetchBooks(A_live_drift, B_fixture)`.
+23. **J2 — verifiable output.** In `packages/margin` add a deterministic `recomputeNetForVerification(ownLegs, computationId)` + hashing helper. In API:
+    - `POST /v1/net-margin` stores `{ sessionId, computationId, commitmentHash, payloadSnapshot }` and returns `commitmentHash`.
+    - `POST /v1/net-margin/verify` re-derives the net from the **caller's own legs only** + stored `computationId`; returns `verified`, `recomputedNet`, `hashMatch`. Never reads the counterparty's stored book during verify.
+    - UI: beside the net result, a small **`Verify` chip** → hits `/verify` → shows `verified ✓` in one beat.
+24. **J3 — N-party netting (N=3).** Generalize `twoPartyNetted(bookA, bookB)` to `nPartyNetted(books[])` in `packages/margin` (same bucketing; iterate all books). Keep `twoPartyNetted` as `nPartyNetted` with N=2 (no fork). Add:
+    - `/v1/net-margin/multi` (N≥2) — fixtures `fixture-three-party` (A longs SOL, B shorts SOL, C cross-bucket offset) so the demo shows a 3-cycle collapsing.
+    - UI third column/pill "N=3" on the Solana demo screen.
+25. **J4 — agent negotiation.** Upgrade `demo-agent-a`/`demo-agent-b` to a two-step flow on camera: (1) both request `/v1/net-margin` (402 → pay → 200) and show each got the **same** net, (2) both call settle; on-screen `agreed → settled`. No new backend needed — it's script choreography + a UI status line.
+26. **J5 — "try to break it".** Add `GET /v1/security/self-audit` returning the structured checks + raw curl probe commands from §9. `/security` page renders them read-only. Zero new attack surface — it's a **documentation** endpoint of existing guards.
+27. **Verify everything:** `npm run typecheck && npm run lint && npm run test && npm run build` green, then a full Judge-Law probe (below §16) on dev and `next start`.
+
+### Production-readiness contract (for a codegen agent)
+
+- All secrets via `process.env`, validated at boot by `lib/env.ts` (fail fast on missing production flags).
+- No `console.log` of legs, books, or sealed payloads; structured-only logs at API layer.
+- Tests cover: fail-closed x402 (no sig → 402, bad sig → 402, valid → 200), capability-token isolation (A cannot read B), no-leg-leak DTO, positions 422 on malformed legs, and at least one golden fixture offsetting A/B.
+- Observe 12-factor: stateless app (session store swappable), env-driven config, health endpoint surfaces backend + x402 state.
+
 ---
 
 ## 16. Demo Law (≤4 minutes each)
@@ -819,11 +933,13 @@ Imperative. Follow in order. **Two-party everywhere. Pluggable backend everywher
 ### Demo Law — Colosseum (Solana) — one-liner: **two-party MPC**
 
 1. **Open UI** (15s). One-liner: two parties, neither sees the other’s book — **cryptographic MPC via Arcium**.
-2. **Load two-party fixture** (or connect A + B) (20s). Point at two wallets — note which is live mainnet RO.
+2. **Load two-party fixture** (or connect A + B) (20s). Point at two wallets — note which is live mainnet RO. If wired: **A's Drift book is real** (`source: live`), B is fixture.
 3. **Adversarial counterfactual** (20s). Click DANGEROUS plaintext operator view. Show **both** books. Say: *“A centralized clearer who sees this can front-run either desk. That is why single-operator clearing fails — and why self-netting one wallet does not need MPC.”*
-4. **Dismiss → Compute confidential** (60–90s). **Arcium MPC** badge or honest Simulated. Point at siloed A, siloed B, siloed combined vs **netted combined** savings.
-5. **Two agents** (45s). Run `pnpm demo:agent-a` and `pnpm demo:agent-b` — each independent key, each 402 → paid 200.
-6. **Close** (20s). Mock equity, simplified haircuts, OSS, business-model honesty, what production needs. Mention Monad TEE expansion only if asked.
+4. **Dismiss → Compute confidential** (60–90s). **Arcium MPC** badge or honest Simulated. Point at siloed A, siloed B, siloed combined vs **netted combined** savings. Point at the **commitment hash** — *“any desk can re-verify this net cryptographically without ever showing the other side its book.”* Tap **Verify** → verified ✓ instant.
+5. **N=3 netting** (20s, only if wired). Quick `/net-margin/multi` beat: three desks, one residual. *“The same math generalizes to any N; the network eats the fragmentation.”*
+6. **Capital release** (30s). Escrow → settle: both desks lock, netted difference settles. *“Not a dashboard number — a clearing transaction.”*
+7. **Two agents negotiate** (45s). Run `pnpm demo:agent-a` and `pnpm demo:agent-b` — each independent key, each 402 → paid 200. Both show the **same** net → settle. On-screen: *agreed → settled*.
+8. **Close** (20s). Mock equity, simplified haircuts, OSS, business-model honesty, what production needs. Mention Monad TEE expansion only if asked.
 
 ### Demo Law — Monad — one-liner: **parallel clearing**
 
@@ -851,6 +967,51 @@ If **two-party confidential netting** (two mutually distrusting parties submitti
 - If README or pitch **equates TEE with MPC**, honesty is broken — fix before submit.
 - If the **adversarial counterfactual** disappears, the sink-question answer weakens — keep it.
 - If `packages/margin` diverges from Arcis / enclave mirrors without golden-fixture lock, backends lie — keep one formula source.
+
+---
+
+## 18. Completing the product — beyond the hackathon
+
+Two-party confidential netting (this hackathon's MVP) is the **wedge**, not the company. The full product is a **confidential clearing network**: desks seal books → net → settle → release capital, verifiably, without any operator seeing a book. Everything below is production-scoped and labeled honestly; changes that also help the **Oct 12/13 judging** are tagged **[judge win]** and should be built if time allows, everything else is **[post-hackathon]**.
+
+### 18.1 Verifiable confidential output **[judge win, ~1h, echoes existing `computationId`/`attestation`]**
+
+- Emit a **commitment**: hash of the sealed inputs + `computationId` (+ enclave attestation quote when real). Display it beside the net result.
+- A desk can then **re-verify the net cryptographically** (deterministic formula on its own inputs + the commitment) without ever revealing its book to the other side.
+- Why it matters: the single strongest judge question is *"if neither party sees the other's book, how do I know the number is honest?"* The commitment *is* the honest answer. It is also the long-term institutional audit moat (attested, reproducible history of every computation).
+
+### 18.2 Net settlement / capital release — the money moment **[judge win, mostly built]**
+
+- Already scaffolded in the repo: escrow envelope (`deposit_escrow`) → `clear` → `settle`, `escrowTxHash`, per-desk capability tokens. **Close the loop on camera**: both desks lock, netted difference settles, UI shows *"capital released"*.
+- This converts the product from "margin *analytics* number" to "a **clearing transaction** a desk would actually want." That framing difference is worth far more than its build cost, both to judges and to investors.
+- **[post-hackathon]** Real capital release: not venue withdrawal (explicitly out of scope) but a **net transfer** against the sealed result (e.g., escrow pool paying the difference) and, later, cross-venue collateral porting under explicit user policy. Requires a real settlement path (program or enclave-signed instruction), legal dispute terms, and insolvency handling — do not demo fake withdrawal.
+
+### 18.3 Beyond two party: N-member netting **[judge win N=3 demo in MVP window; N-party network post-hackathon]**
+
+- MVP is two-party deliberately. The full product nets **N desks against the pool**: each member seals its exposure, receives only `its own net vs pool` — a genuine clearing pool where members never see each other's books.
+- **In the hackathon window:** ship the N=3 demo (J3) — `nPartyNetted(books[])`, two-party = N=2 case, `/v1/net-margin/multi` + `fixture-three-party`. The three-desk cycle collapsing to one residual is the network-effects visual judges can grasp immediately.
+- Keep the same `packages/margin` formula and backend interface; the two-party result is the N=2 case. Design the inputs schema (fixed-N padded arrays) so N-party is a drop-in today.
+- This is what turns "two desks" into a **network business** (each additional member increases netting value for all — network effects, credibility increasing returns).
+
+### 18.4 Counterparty discovery with blinded hints **[post-hackathon]**
+
+- Discover *who to net against* without leaking a book: opt-in directory where each desk publishes only **blinded compatibility hints** (bucket-level exposure *magnitudes* with additive noise, or a zero-knowledge "my SOL exposure is within [x,y]" token).
+- This is **not order matching and not a dark pool** (nothing crosses an order; desks privately agree to pair). It is counterparty *discovery* — the distribution layer that gives the network a way to grow. Disappear-test safe: removing it kills growth, not the core product.
+
+### 18.5 Agent SDK / MCP gateway **[post-hackathon]**
+
+- The x402 flow already makes the API machine-payable. Complete the agent story with a one-line SDK + an MCP tool (`obligor_net_quote(book, counterparty)`): any agent/desk requests a confidential net quote and pays per call.
+- **In the hackathon window:** the J4 negotiation beat (both agents 402 → paid → same net → settle) is the visible seed of this — it demonstrates the machine-to-machine clearing loop that the SDK packages later.
+- Distribution wedge: if two-agent x402 is the MVP demo, the SDK is how that pattern **spreads to the first agent hackers** without a sales team. Judges also see "you made this consumable by other developers" — an openness/utility win.
+
+### 18.6 Production clearing path (honest CCP-scope) **[post-hackathon, regulated]**
+
+- Default fund / insurance pool staked to back member default (potential token utility — **only** if non-speculative and clearly disclosed), per-member credit limits, oracle-adversity padding, dispute arbitration, and audit-traceable computation history.
+- This is the LCH-of-agent-DeFi endgame; it needs legal netting-enforceability analysis and venue cooperation. Do **not** claim CCP status today. State it as *what production still needs* (README) — honesty is the pitch.
+
+### 18.7 Priority rules (unchanged)
+
+- Colosseum **Oct 12**, Monad **Oct 13**. Build 18.1 + 18.2 first (they are judge wins); 18.3–18.5 only after both MVPs. Nothing here resurrects single-wallet self-netting, a dark pool, custody, or a new venue. Every section keeps the disappear test (§17) intact.
 
 ---
 
@@ -882,3 +1043,12 @@ If **two-party confidential netting** (two mutually distrusting parties submitti
 | Priority | **Win Colosseum**; Monad = expansion proof; day-9 Solana red → kill Monad |
 | Business model | Per-call fee = wedge; moat = mutually-distrusting two-party case |
 | Stack constraint | Enclave code **Rust**; TS/Next for app; Arcis/Anchor on Solana |
+| Deal-room authorization | Per-desk **capability tokens** (32-byte, only sha256 hashes at rest) — either desk sees only its own book; judge demo holds both |
+| Escrow / settlement | **Demo-scaffolded** escrow envelope → settle lifecycle (deposit → net → settle); no custody, no venue withdrawal |
+| Verifiable output | On-chain **commitment** (hash of sealed inputs + `computationId` + attestation quote) so a desk can cryptographically verify the net without reveal — judge chip now, audit moat later |
+| **J1 — Live Drift leg** | ≥1 `source: "live"` leg via Drift mainnet read-only SDK; degrade loudly on RPC failure — never silently fixture |
+| **J2 — Verify round-trip** | `POST /v1/net-margin/verify` recomputes net from caller's own legs + commitment; `verified:true` without counterparty reveal |
+| **J3 — N-party formula** | `nPartyNetted(books[])`, two-party = N=2 case, single formula, no fork; `/v1/net-margin/multi` for N=3 demo |
+| **J4 — Agent negotiation** | `demo-agent-a/b` both 402 → paid → same net → settle on camera (agreed → settled) |
+| **J5 — Security self-audit** | `GET /v1/security/self-audit` + `/security` page: fail-closed x402, capability-token isolation, 422s, no-leg-leak, HSTS, seedless |
+| Production-readiness | Fail-fast env validation, no secrets committed, structured logs, tests for fail-closed x402 + token isolation + no-leg-leak + golden fixtures, green `typecheck && lint && test && build` |
