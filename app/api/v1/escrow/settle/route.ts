@@ -7,7 +7,8 @@ const bodySchema = z.object({
   escrowId: z.string().trim().min(4).max(64),
   chain: chainSchema.default("solana"),
   totalLockedUsd: z.number().positive().max(100_000_000),
-  nettedMarginUsd: z.number().positive().max(100_000_000),
+  /** Netted margin may be 0 for fully offsetting books — never negative. */
+  nettedMarginUsd: z.number().nonnegative().max(100_000_000),
   /** Output of the confidential computation this release is conditioned on. */
   proofHash: z.string().trim().min(8).max(128),
   partyALockedUsd: z.number().nonnegative(),

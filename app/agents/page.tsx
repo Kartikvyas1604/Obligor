@@ -2,20 +2,30 @@
 
 import { useState } from "react";
 import { PageShell } from "@/components/page-shell";
-import { Play } from "lucide-react";
+import { Play, ShieldCheck, LoaderCircle } from "lucide-react";
 
 type Line = { text: string; cls?: string };
+
+export interface AgentReport {
+  nettedCombinedUsd: number;
+  siloedCombinedUsd: number;
+  siloedAUsd: number;
+  siloedBUsd: number;
+  computationId: string;
+}
 
 function AgentTerminal({
   title,
   endpoint,
   payload,
   requires402 = true,
+  onNet,
 }: {
   title: string;
   endpoint: string;
   payload: Record<string, unknown>;
   requires402?: boolean;
+  onNet?: (report: AgentReport) => void;
 }) {
   const [running, setRunning] = useState(false);
   const [lines, setLines] = useState<Line[]>([]);
@@ -119,7 +129,18 @@ function AgentTerminal({
                 text: `Privacy: ${data.bookSummary?.venues?.length || 0} venues aggregated · legs strictly omitted`,
                 cls: "t-muted",
               },
+              { text: `Negotiation: reporting net to settlement ledger...`, cls: "t-muted" },
             ]);
+
+            // Hand the agreed figure up to the shared negotiation state so the
+            // page can show agreed → settled once both agents converge.
+            onNet?.({
+              nettedCombinedUsd: Number(data.margin?.nettedCombinedUsd ?? 0),
+              siloedCombinedUsd: Number(data.margin?.siloedCombinedUsd ?? 0),
+              siloedAUsd: Number(data.margin?.siloedAUsd ?? 0),
+              siloedBUsd: Number(data.margin?.siloedBUsd ?? 0),
+              computationId: String(data.margin?.computationId ?? ""),
+            });
           }
         }
       } else {
@@ -223,7 +244,159 @@ function AgentTerminal({
   );
 }
 
+const usd = (n: number) =>
+  n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+
+function SettlementBar({ a, b }: { a: AgentReport | null; b: AgentReport | null }) {
+  const [settling, setSettling] = useState(false);
+  const [settleResult, setSettleResult] = useState<({ for: string } & Record<string, unknown>) | null>(null);
+  const [settleError, setSettleError] = useState<{ for: string; message: string } | null>(null);
+
+  const pairKey = a && b ? `${a.computationId}|${b.computationId}` : null;
+  const both = Boolean(a && b);
+  const agreed =
+    both && Math.abs((a?.nettedCombinedUsd ?? 0) - (b?.nettedCombinedUsd ?? 0)) <= 0.5 ? a! : null;
+  // A release is current only while it names this exact computation pair.
+  const current = settleResult && pairKey && settleResult.for === pairKey ? settleResult : null;
+  const currentError = settleError && pairKey && settleError.for === pairKey ? settleError : null;
+
+  let status: { label: string; cls: string } = {
+    label: "Waiting — run both agents",
+    cls: "border-muted bg-muted text-muted-foreground",
+  };
+  if (both && agreed) {
+    status = {
+      label: `Agreed — both agents net to ${usd(agreed.nettedCombinedUsd)}`,
+      cls: "border-success/40 bg-success/5 text-success",
+    };
+  } else if (both && !agreed) {
+    status = {
+      label: "Dispute — agents disagree on the net figure, re-run both",
+      cls: "border-destructive/40 bg-destructive/5 text-destructive",
+    };
+  } else if (a ? !b : b) {
+    status = {
+      label: "One agent reported — waiting for the counterparty to agree",
+      cls: "border-muted bg-muted text-muted-foreground",
+    };
+  }
+
+  async function settle() {
+    if (!agreed || !pairKey) return;
+    setSettling(true);
+    setSettleError(null);
+    setSettleResult(null);
+    try {
+      const res = await fetch("/api/v1/escrow/settle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          escrowId: `escrow-${Date.now().toString(36)}`,
+          chain: "solana",
+          totalLockedUsd: agreed.siloedCombinedUsd,
+          nettedMarginUsd: agreed.nettedCombinedUsd,
+          proofHash: agreed.computationId,
+          partyALockedUsd: agreed.siloedAUsd,
+          partyBLockedUsd: agreed.siloedBUsd,
+        }),
+      });
+      const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+      if (!res.ok || !body) {
+        setSettleError({
+          for: pairKey,
+          message: (body as { message?: string } | null)?.message ?? `Settle returned ${res.status}`,
+        });
+        return;
+      }
+      setSettleResult({ ...body, for: pairKey });
+    } catch {
+      setSettleError({ for: pairKey, message: "Network error contacting the settlement endpoint." });
+    } finally {
+      setSettling(false);
+    }
+  }
+
+  return (
+    <section
+      aria-label="Two-agent negotiation and settlement"
+      className="rounded-xl border border-border bg-card p-5"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-xs ${status.cls}`}
+            role="status"
+            aria-live="polite"
+          >
+            <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
+            {status.label}
+          </span>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Agent A
+            <span className={a ? "text-success" : "text-muted-foreground/40"}>
+              {a ? ` · ${usd(a.nettedCombinedUsd)}` : " · idle"}
+            </span>
+            {"  ·  "}Agent B
+            <span className={b ? "text-success" : "text-muted-foreground/40"}>
+              {b ? ` · ${usd(b.nettedCombinedUsd)}` : " · idle"}
+            </span>
+          </span>
+        </div>
+
+        {agreed && (
+          <button
+            type="button"
+            onClick={settle}
+            disabled={settling || Boolean(current)}
+            className="btn-light inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {settling ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+            ) : current ? (
+              "Settled"
+            ) : (
+              "Sign settlement"
+            )}
+          </button>
+        )}
+      </div>
+
+      {currentError && (
+        <p role="alert" className="mt-3 text-xs text-destructive">
+          {currentError.message}
+        </p>
+      )}
+
+      {current && (
+        <div className="mt-4 grid gap-3 md:grid-cols-3" role="status" aria-live="polite">
+          {[
+            { label: "Netted margin", value: usd(Number(current.nettedMarginUsd)) },
+            { label: "Freed capital", value: usd(Number(current.freedCapitalUsd)) },
+            {
+              label: "Released",
+              value: `${usd(Number(current.releasedToPartyAUsd))} → A · ${usd(Number(current.releasedToPartyBUsd))} → B`,
+            },
+          ].map((s) => (
+            <div key={s.label} className="rounded-md border border-border bg-background p-3">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                {s.label}
+              </p>
+              <p className="mt-1 font-mono text-success">{s.value}</p>
+            </div>
+          ))}
+          <p className="font-mono text-[11px] text-muted-foreground md:col-span-3">
+            agreed → settled · escrow {String(current.escrowId)} · proof {agreed?.computationId.slice(0, 12)}…
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function AgentsPage() {
+  const [netA, setNetA] = useState<AgentReport | null>(null);
+  const [netB, setNetB] = useState<AgentReport | null>(null);
+
   return (
     <PageShell>
       <div className="flex flex-col gap-10">
@@ -273,18 +446,22 @@ export default function AgentsPage() {
           </ol>
         </section>
 
+        <SettlementBar a={netA} b={netB} />
+
         <div className="grid gap-6 lg:grid-cols-2">
           <AgentTerminal
             title="demo-agent-a (Solana Party A)"
             endpoint="/api/v1/net-margin"
             payload={{ chain: "solana", backend: "arcium" }}
             requires402={true}
+            onNet={setNetA}
           />
           <AgentTerminal
             title="demo-agent-b (Solana Party B)"
             endpoint="/api/v1/net-margin"
             payload={{ chain: "solana", backend: "arcium" }}
             requires402={true}
+            onNet={setNetB}
           />
         </div>
 
