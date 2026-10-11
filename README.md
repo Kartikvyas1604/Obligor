@@ -393,8 +393,8 @@ typed access in `lib/env.ts` — see [`.env.example`](.env.example) for the full
 | Tier | Session store | Demo fixtures | Unpaid clearing | Payments |
 | --- | --- | --- | --- | --- |
 | Local dev | `SESSION_STORE_MODE=memory` | `DEMO_ALLOW_FIXTURES=true` | `DEMO_ALLOW_UNPAID=true` | optional |
-| Staging | `file` (or managed DB) | off | off | devnet/testnet USDC |
-| Production | `file` built-in; swap the store impl for Redis/Postgres (interface in `lib/session-store.ts`) | **off (hard default)** | **off (hard default)** | real payTo wallets via `SOLANA_PAY_TO` / `MONAD_PAY_TO` |
+| Staging | `file` (or `sqlite` on shared volume) | off | off | devnet/testnet USDC |
+| Production | `sqlite` (multi-process, shared volume) or `file` (single instance); swap the store impl for Postgres/Redis for multi-machine | **off (hard default)** | **off (hard default)** | real payTo wallets via `SOLANA_PAY_TO` / `MONAD_PAY_TO` |
 
 **Confidential execution gate:** `CONFIDENTIAL_REAL_TRANSPORTS=true` requires `ARCIUM_MXE_ENDPOINT` / `ENCLAVE_ENDPOINT` and makes uncon-nected transports **fail closed** (`CONFIDENTIAL_UNAVAILABLE`) instead of silently simulating. Leave it `false` only where labeled simulation is the intent (demos, CI); the run's trust model is always whatever actually executed.
 
@@ -413,12 +413,12 @@ by them — the 402/x402 challenge is built from `X402_*` env terms and returns 
 4. Rollback: deploy the previous build tag; sessions written in the newer schema are
    rejected on load and quarantined (`sessions.json.corrupt-*`) rather than crashing.
 
-**Container deploy.** `Dockerfile` builds a self-contained image (`next.config.ts` sets
-`output: "standalone"`): multi-stage `deps → build → runner`, non-root user, a
-`/data` volume for the file session store (`DATA_DIR=/data`), and a `HEALTHCHECK` that
-polls `GET /api/v1/health`. Secrets are supplied at `docker run` time, never baked in —
-`.dockerignore` excludes `.env*`. `.github/workflows/deploy.yml` builds the image,
-**boots it and asserts `/health` returns `ok:true`**, then pushes to GHCR. Run locally:
+**Container deploy.** `Dockerfile` builds a production image: multi-stage
+`deps → build → runner`, non-root user, a `/data` volume for the file session store
+(`DATA_DIR=/data`), and a `HEALTHCHECK` that polls `GET /api/v1/health`. Secrets are
+supplied at `docker run` time, never baked in — `.dockerignore` excludes `.env*`.
+`.github/workflows/deploy.yml` builds the image, **boots it and asserts `/health` returns
+`ok:true`**, then pushes to GHCR. Run locally:
 
 ```bash
 docker build -t obligor .
@@ -497,8 +497,10 @@ idempotency store for a shared one (Redis/Postgres), then run multiple instances
 - **x402 signature verification is format-check only** until the `@x402` SDK wiring;
   payment enforcement (402 → paid) is real, cryptographic settlement verification is
   a follow-up.
-- The file session store is single-instance; horizontal scale needs the Redis/Postgres
-  implementation noted above.
+- The file session store is single-instance; `SESSION_STORE_MODE=sqlite` (node:sqlite,
+  no external service) lets several app processes share one volume, but a true
+  multi-machine deployment still needs the Postgres/Redis implementation of the same
+  `SessionStore` interface. Rate limiting remains per-instance until then.
 
 ---
 

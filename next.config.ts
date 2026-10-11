@@ -33,8 +33,6 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // Emit a self-contained server bundle for the Docker/deploy image.
-  output: "standalone",
   poweredByHeader: false,
   reactStrictMode: true,
   async headers() {

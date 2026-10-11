@@ -57,8 +57,15 @@ const envSchema = z.object({
   }),
 
   store: z.object({
-    mode: z.enum(["memory", "file"]).optional().default("file"),
+    // memory = per-process Map (dev); file = atomic JSON on local disk
+    // (single-instance); sqlite = node:sqlite database file, safe for multiple
+    // processes sharing one volume (the scale-out-ready, dependency-free step).
+    mode: z.enum(["memory", "file", "sqlite"]).optional().default("file"),
     ttlMs: positiveInt(1000 * 60 * 60 * 24), // sessions expire after 24h
+    // Shared idempotency store backend for write-intent replay/conflict checks.
+    // Defaults to the session store mode so a single switch scales both.
+    idempotencyBackend: z.enum(["memory", "sqlite"]).optional(),
+    sqlitePath: z.string().optional().default(""),
   }),
 
   rateLimit: z.object({
@@ -143,7 +150,12 @@ function load(): Env {
       allowFixtures: process.env.DEMO_ALLOW_FIXTURES,
       allowUnpaid: process.env.DEMO_ALLOW_UNPAID,
     },
-    store: { mode: process.env.SESSION_STORE_MODE, ttlMs: process.env.SESSION_TTL_MS },
+    store: {
+      mode: process.env.SESSION_STORE_MODE,
+      ttlMs: process.env.SESSION_TTL_MS,
+      idempotencyBackend: process.env.IDEMPOTENCY_BACKEND,
+      sqlitePath: process.env.SQLITE_PATH,
+    },
     rateLimit: {
       maxPerWindow: process.env.RATE_LIMIT_MAX,
       windowMs: process.env.RATE_LIMIT_WINDOW_MS,

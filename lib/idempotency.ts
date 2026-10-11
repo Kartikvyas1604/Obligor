@@ -6,12 +6,15 @@
  * retry that smuggles a different body under an already-used key is rejected
  * with a 409 conflict so two desks can never disagree about an escrowIntent.
  *
- * In-memory per instance, with a TTL — same scope as the rate limiter. The
- * multi-instance caveat is documented in README (put a shared edge limiter /
- * store in front when scaling out).
+ * Two backends behind one interface:
+ *  - memory (default): per-process Map, lost on restart, TTL-evicted.
+ *  - sqlite (`IDEMPOTENCY_BACKEND=sqlite`, implied by `SESSION_STORE_MODE=sqlite`):
+ *    shared across processes on the same volume so replay/conflict decisions
+ *    are consistent across instances — see `lib/sqlite.ts`.
  */
 
 import { createHash, randomUUID } from "node:crypto";
+import { effectiveIdempotencyBackend, openSqlite } from "./sqlite";
 
 export interface IdempotentRecord {
   key: string;
@@ -31,17 +34,99 @@ export class IdempotencyConflictError extends Error {
   }
 }
 
-interface MapEntry {
-  record: IdempotentRecord;
-}
-
 const TTL_MS = 24 * 60 * 60 * 1000;
 
+interface Backend {
+  get(key: string): IdempotentRecord | null;
+  put(record: IdempotentRecord): void;
+  purge(): void;
+}
+
+// ---- memory backend ----
 const globalForIdempotency = globalThis as unknown as {
-  __obligorIdempotency?: Map<string, MapEntry>;
+  __obligorIdempotency?: Map<string, IdempotentRecord>;
 };
-const store: Map<string, MapEntry> =
+const memStore: Map<string, IdempotentRecord> =
   (globalForIdempotency.__obligorIdempotency ??= new Map());
+
+const memoryBackend: Backend = {
+  get(key) {
+    const rec = memStore.get(key);
+    if (!rec) return null;
+    if (rec.expiresAt <= Date.now()) {
+      memStore.delete(key);
+      return null;
+    }
+    return rec;
+  },
+  put(record) {
+    memStore.set(record.key, record);
+  },
+  purge() {
+    const now = Date.now();
+    for (const [key, rec] of memStore) if (rec.expiresAt <= now) memStore.delete(key);
+  },
+};
+
+// ---- sqlite backend ----
+let sqliteBackend: Backend | null = null;
+function getSqliteBackend(): Backend {
+  if (sqliteBackend) return sqliteBackend;
+  const db = openSqlite();
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS idempotency (
+       key TEXT PRIMARY KEY,
+       fingerprint TEXT NOT NULL,
+       recorded_at INTEGER NOT NULL,
+       expires_at INTEGER NOT NULL,
+       response TEXT NOT NULL
+     );`,
+  );
+  db.exec("CREATE INDEX IF NOT EXISTS idx_idempotency_expires ON idempotency(expires_at);");
+  sqliteBackend = {
+    get(key) {
+      db.prepare("DELETE FROM idempotency WHERE expires_at <= ?").run(Date.now());
+      const row = db
+        .prepare("SELECT key, fingerprint, recorded_at, expires_at, response FROM idempotency WHERE key = ?")
+        .get(key) as
+        | { key: string; fingerprint: string; recorded_at: number; expires_at: number; response: string }
+        | undefined;
+      if (!row) return null;
+      return {
+        key: row.key,
+        requestFingerprint: row.fingerprint,
+        recordedAt: row.recorded_at,
+        expiresAt: row.expires_at,
+        response: JSON.parse(row.response),
+      };
+    },
+    put(record) {
+      db.prepare(
+        `INSERT INTO idempotency (key, fingerprint, recorded_at, expires_at, response)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET
+           fingerprint = excluded.fingerprint,
+           recorded_at = excluded.recorded_at,
+           expires_at  = excluded.expires_at,
+           response    = excluded.response`,
+      ).run(
+        record.key,
+        record.requestFingerprint,
+        record.recordedAt,
+        record.expiresAt,
+        JSON.stringify(record.response),
+      );
+    },
+    purge() {
+      db.prepare("DELETE FROM idempotency WHERE expires_at <= ?").run(Date.now());
+    },
+  };
+  return sqliteBackend;
+}
+
+function backend(): Backend {
+  return effectiveIdempotencyBackend() === "sqlite" ? getSqliteBackend() : memoryBackend;
+}
 
 /** Stable fingerprint of the normalized request body for replay-reuse checks. */
 export function fingerprintBody(body: Record<string, unknown>): string {
@@ -50,10 +135,7 @@ export function fingerprintBody(body: Record<string, unknown>): string {
 }
 
 export function purgeExpired(): void {
-  const now = Date.now();
-  for (const [key, entry] of store) {
-    if (entry.record.expiresAt <= now) store.delete(key);
-  }
+  backend().purge();
 }
 
 /**
@@ -66,14 +148,12 @@ export function replayIdempotent<T extends object>(
   key: string,
   requestFingerprint: string,
 ): T | null {
-  purgeExpired();
-  const entry = store.get(key);
-  if (!entry) return null;
-
-  if (entry.record.requestFingerprint !== requestFingerprint) {
+  const rec = backend().get(key);
+  if (!rec) return null;
+  if (rec.requestFingerprint !== requestFingerprint) {
     throw new IdempotencyConflictError(key);
   }
-  return entry.record.response as T;
+  return rec.response as T;
 }
 
 /** Records a result under an Idempotency-Key, returning the stored record. */
@@ -90,7 +170,7 @@ export function recordIdempotent<T extends object>(
     expiresAt: now + TTL_MS,
     response,
   };
-  store.set(key, { record });
+  backend().put(record);
   return record;
 }
 

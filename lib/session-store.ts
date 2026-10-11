@@ -16,12 +16,13 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { join, resolve } from "node:path";
 import { env } from "./env";
 import { makeLogger } from "./logger";
+import { openSqlite } from "./sqlite";
 import type { DealSession } from "./deal-session";
 
 const log = makeLogger("store");
 
 export interface SessionStore {
-  readonly mode: "memory" | "file";
+  readonly mode: "memory" | "file" | "sqlite";
   get(id: string): DealSession | null;
   set(session: DealSession): void;
   delete(id: string): void;
@@ -167,8 +168,91 @@ export class FileStore implements SessionStore {
   }
 }
 
+// ---------------------------------------
+// SQLite store (node:sqlite; shared-volume safe)
+// ---------------------------------------
+export class SqliteStore implements SessionStore {
+  readonly mode = "sqlite" as const;
+
+  constructor(
+    private readonly db = openSqlite(),
+    private readonly ttlMs: number | undefined = undefined,
+  ) {
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS sessions (
+         id TEXT PRIMARY KEY,
+         updated_at INTEGER NOT NULL,
+         data TEXT NOT NULL
+       );`,
+    );
+    db.exec("CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at);");
+  }
+
+  private ttl() {
+    return this.ttlMs ?? env.store.ttlMs;
+  }
+
+  private evictExpired() {
+    const cutoff = Date.now() - this.ttl();
+    this.db.prepare("DELETE FROM sessions WHERE updated_at < ?").run(cutoff);
+  }
+
+  get(id: string): DealSession | null {
+    this.evictExpired();
+    const row = this.db
+      .prepare("SELECT data FROM sessions WHERE id = ?")
+      .get(id) as { data?: string } | undefined;
+    if (!row?.data) return null;
+    try {
+      return JSON.parse(row.data) as DealSession;
+    } catch {
+      return null;
+    }
+  }
+
+  set(session: DealSession): void {
+    this.db
+      .prepare(
+        `INSERT INTO sessions (id, updated_at, data) VALUES (?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET updated_at = excluded.updated_at, data = excluded.data`,
+      )
+      .run(session.sessionId, session.updatedAt, JSON.stringify(session));
+    this.evictExpired();
+  }
+
+  delete(id: string): void {
+    this.db.prepare("DELETE FROM sessions WHERE id = ?").run(id);
+  }
+
+  all(): DealSession[] {
+    this.evictExpired();
+    const rows = this.db
+      .prepare("SELECT data FROM sessions ORDER BY updated_at DESC")
+      .all() as { data: string }[];
+    const out: DealSession[] = [];
+    for (const r of rows) {
+      try {
+        out.push(JSON.parse(r.data) as DealSession);
+      } catch {
+        // skip unreadable row
+      }
+    }
+    return out;
+  }
+}
+
 function createStore(): SessionStore {
   if (env.store.mode === "memory") return new MemoryStore();
+  if (env.store.mode === "sqlite") {
+    try {
+      return new SqliteStore();
+    } catch (err) {
+      log.error("sqlite store unavailable — falling back to file store", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      // fall through to file
+    }
+  }
   const file = new FileStore();
   if (file.mode === "file" && !("filePath" in file && (file as unknown as { filePath: string }).filePath)) {
     // Constructor failed to set up the file path — degrade to memory.
