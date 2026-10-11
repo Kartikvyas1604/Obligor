@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Dependency vulnerability scan (fail on high/critical)
+        run: npm audit --audit-level=high
+
       - name: Lint
         run: npm run lint
 
@@ -40,12 +43,23 @@ jobs:
         env:
           NODE_ENV: production
 
-      - name: Demo Law smoke — agent scripts reach 402 → paid → 200 against the built server
+      - name: Demo Law smoke + endpoint security contract
+        # A clean checkout has no .env, so the x402 destination and the demo
+        # escape hatches must be supplied explicitly — otherwise the challenge
+        # is unconfigured and the smoke fails closed (503), which is correct
+        # behavior but not what the agents assert.
+        env:
+          SOLANA_PAY_TO: 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU
+          X402_ACCEPT_UNVERIFIED_SIGNATURES: "true"
+          DEMO_ALLOW_FIXTURES: "true"
+          DEMO_ALLOW_UNPAID: "true"
+          NEXT_PUBLIC_API_BASE: http://localhost:3000
         run: |
           npx next start -p 3000 &
-          sleep 5
-          DEMO_ALLOW_FIXTURES=true DEMO_ALLOW_UNPAID=true npx -y tsx scripts/demo-agent-a.ts
+          sleep 6
+          npx -y tsx scripts/demo-agent-a.ts
           npx -y tsx scripts/demo-agent-b.ts
+          npm run verify:security
 
   # Compiled-artifact claims become checkable: the Arcis circuit, Rust
   # enclave, and Solidity escrow contract must not just exist but build.
