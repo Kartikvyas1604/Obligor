@@ -64,6 +64,7 @@ export default function MonadPage() {
   const [epochDurationMs, setEpochDurationMs] = useState<number | null>(null);
   const [attestationNote, setAttestationNote] = useState<string | null>(null);
   const [attestationQuote, setAttestationQuote] = useState<string | null>(null);
+  const [attestationVerified, setAttestationVerified] = useState<boolean | null>(null);
   const [epochId, setEpochId] = useState<string | null>(null);
 
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -169,6 +170,7 @@ export default function MonadPage() {
       setPairResults(new Map(data.pairs.map((p) => [p.pairId, p])));
       setAttestationQuote(data.attestation?.quote ?? null);
       setAttestationNote(data.attestation?.note ?? null);
+      setAttestationVerified(data.attestation?.verified ?? null);
     } catch {
       setStageError("Network error — the epoch never reached the enclave backend");
       setEpoch("error");
@@ -192,6 +194,7 @@ export default function MonadPage() {
     setEpochDurationMs(null);
     setAttestationNote(null);
     setAttestationQuote(null);
+    setAttestationVerified(null);
   }
 
   return (
@@ -211,9 +214,19 @@ export default function MonadPage() {
               <strong className="text-foreground">TEE ≠ MPC</strong>).
             </p>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-steel/40 px-2.5 py-1 font-mono text-xs text-steel">
-            <span className="h-1.5 w-1.5 rounded-full bg-steel" aria-hidden />
-            TEE attested
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-xs ${
+              attestationVerified
+                ? "border-primary/40 text-primary"
+                : "border-steel/40 text-steel"
+            }`}
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
+            {attestationVerified
+              ? "TEE attested"
+              : epoch === "done"
+                ? "TEE · not attested in this run"
+                : "TEE · simulation"}
           </span>
         </div>
 
