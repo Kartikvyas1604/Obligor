@@ -28,7 +28,11 @@ export function paymentRequired(chain: Chain): PaymentRequirement {
   const asset = chain === "monad" ? env.x402.monadAssetMint : env.x402.solanaAssetMint;
   const payTo = chain === "monad" ? env.x402.monadPayTo : env.x402.solanaPayTo;
 
-  if (!payTo) {
+  // Monad x402 is explicitly disabled until X402_MONAD_ENABLED=true after the
+  // facilitator probe passes — MONAD_PAY_TO alone never enables payments.
+  const chainEnabled = chain === "monad" ? env.x402.monadEnabled : Boolean(payTo);
+
+  if (!chainEnabled || !payTo) {
     return { configured: false };
   }
 

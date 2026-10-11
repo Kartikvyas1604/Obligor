@@ -85,6 +85,10 @@ const envSchema = z.object({
     monadPayTo: z.string().optional().default(""),
     facilitatorUrlSolana: z.string().optional().default(""),
     facilitatorUrlMonad: z.string().optional().default(""),
+    // Monad x402 is off until a facilitator is verified and explicitly
+    // enabled. Keeps the "else Solana-only x402 + honest README" path from
+    // AGENT.md real: MONAD_PAY_TO alone never silently enables Monad payments.
+    monadEnabled: boolish(false),
     // Receipt verification is wired when the @x402 SDK lands. Until then an
     // unverified receipt header is accepted ONLY under this explicit escape
     // hatch (dev default ON like the demo flags, locked OFF in production).
@@ -157,6 +161,7 @@ function load(): Env {
       monadPayTo: process.env.MONAD_PAY_TO,
       facilitatorUrlSolana: process.env.FACILITATOR_URL_SOLANA,
       facilitatorUrlMonad: process.env.FACILITATOR_URL_MONAD,
+      monadEnabled: process.env.X402_MONAD_ENABLED,
       acceptUnverifiedSignatures: process.env.X402_ACCEPT_UNVERIFIED_SIGNATURES,
     },
     positions: {

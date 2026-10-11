@@ -94,6 +94,7 @@ async function verifyNetworks() {
 
   console.log("Gate semantics:");
   console.log("- A chain with a failed facilitator probe MUST NOT enable x402 in its env (X402_MONAD_ENABLED=false).");
+  console.log("- Monad x402 only flips on when BOTH X402_MONAD_ENABLED=true AND the probe verified; a failed probe here means keep it false.");
   console.log("- A chain with no public facilitator keeps speed-direct settlement; its 402 challenge still advertises payTo + terms from env.");
   console.log("- Exit code is 0 only when every configured probe verified.\n");
 

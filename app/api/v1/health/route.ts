@@ -9,7 +9,7 @@ import { sessionStore } from "@/lib/session-store";
  */
 export function GET() {
   const solanaPayments = Boolean(env.x402.solanaPayTo);
-  const monadPayments = Boolean(env.x402.monadPayTo);
+  const monadPayments = Boolean(env.x402.monadPayTo) && env.x402.monadEnabled;
   const sessions = sessionStore.all();
 
   return NextResponse.json({
@@ -33,7 +33,7 @@ export function GET() {
         priceUsd: env.x402.priceUsd,
         networks: {
           solana: { network: env.x402.solanaNetwork, asset: env.x402.solanaAssetMint, enabled: solanaPayments },
-          monad: { network: env.x402.monadNetwork, asset: env.x402.monadAssetMint, enabled: monadPayments },
+          monad: { network: env.x402.monadNetwork, asset: env.x402.monadAssetMint, enabled: monadPayments, gate: "X402_MONAD_ENABLED" },
         },
       },
       oracle: {
