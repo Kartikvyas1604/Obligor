@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ApiError, parseBody, rateLimitFor, readJsonBody, withApi } from "@/lib/http";
 import { chainSchema } from "@/lib/env";
+import {
+  IdempotencyConflictError,
+  fingerprintBody,
+  recordIdempotent,
+  replayIdempotent,
+} from "@/lib/idempotency";
 
 const bodySchema = z.object({
   escrowId: z.string().trim().min(4).max(64),
@@ -25,6 +31,27 @@ export const POST = withApi(async ({ req }) => {
   rateLimitFor("default", req);
   const body = parseBody(bodySchema, await readJsonBody(req));
 
+  const idempotencyKey = req.headers.get("idempotency-key");
+  if (idempotencyKey) {
+    const fingerprint = fingerprintBody(body as unknown as Record<string, unknown>);
+    let prior: { ok: boolean; escrowId: string } | null;
+    try {
+      prior = replayIdempotent<{ ok: boolean; escrowId: string }>(idempotencyKey, fingerprint);
+    } catch (err) {
+      if (err instanceof IdempotencyConflictError) {
+        throw new ApiError(err.status, err.code, err.message);
+      }
+      throw err;
+    }
+    if (prior) {
+      return NextResponse.json({
+        ...prior,
+        replayed: true,
+        note: "This settlement was already computed — returning the original result (Idempotency-Key replay).",
+      });
+    }
+  }
+
   if (body.nettedMarginUsd > body.totalLockedUsd) {
     throw ApiError.badRequest(
       "Netted margin cannot exceed the total locked amount",
@@ -45,7 +72,7 @@ export const POST = withApi(async ({ req }) => {
     splitTotal > 0 ? Math.round((freedCapital * body.partyALockedUsd) / splitTotal * 100) / 100 : 0;
   const releasedToB = Math.round((freedCapital - releasedToA) * 100) / 100;
 
-  return NextResponse.json({
+  const result = {
     ok: true,
     escrowId: body.escrowId,
     chain: body.chain,
@@ -56,8 +83,19 @@ export const POST = withApi(async ({ req }) => {
     freedCapitalUsd: freedCapital,
     releasedToPartyAUsd: releasedToA,
     releasedToPartyBUsd: releasedToB,
+    idempotencyKey: idempotencyKey ?? null,
     timestamp: new Date().toISOString(),
     message:
       "Release computed from the verified netting result. On-chain transfer executes in the escrow contract repo; this envelope carries no fabricated transaction hash.",
-  });
+  };
+
+  if (idempotencyKey) {
+    recordIdempotent(
+      idempotencyKey,
+      fingerprintBody(body as unknown as Record<string, unknown>),
+      result,
+    );
+  }
+
+  return NextResponse.json(result);
 });
