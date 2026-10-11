@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ApiError, parseBody, rateLimitFor, readJsonBody, withApi } from "@/lib/http";
-import { env, chainSchema } from "@/lib/env";
+import { chainSchema } from "@/lib/env";
+import { isPaid, paymentRequired } from "@/lib/x402";
 import { getConfidentialBackend } from "@/lib/confidential";
 import { priceAndNormalizeLegs } from "@/lib/positions";
 import { makeLogger } from "@/lib/logger";
+import { computeCommitmentHash, hashLegs } from "@/lib/commitment";
+import { registerComputation } from "@/lib/computation-registry";
 import type { BackendKind } from "@/lib/margin";
 
 const log = makeLogger("net-margin");
@@ -27,45 +30,6 @@ const bodySchema = z.object({
   demoPayment: z.boolean().optional(),
 });
 
-/** Build the 402 challenge from env-configured payment terms. */
-function paymentRequired(chain: "solana" | "monad") {
-  const network =
-    chain === "monad" ? env.x402.monadNetwork : env.x402.solanaNetwork;
-  const asset =
-    chain === "monad" ? env.x402.monadAssetMint : env.x402.solanaAssetMint;
-  const payTo = chain === "monad" ? env.x402.monadPayTo : env.x402.solanaPayTo;
-
-  if (!payTo) {
-    return {
-      configured: false as const,
-    };
-  }
-
-  const facilitator =
-    chain === "monad" ? env.x402.facilitatorUrlMonad : env.x402.facilitatorUrlSolana;
-
-  return {
-    configured: true as const,
-    challenge: {
-      version: "2.0",
-      scheme: "exact",
-      network,
-      asset,
-      priceUsd: env.x402.priceUsd.toFixed(2),
-      baseUnits: env.x402.baseUnits,
-      payTo,
-      ...(facilitator ? { facilitator } : {}),
-    },
-  };
-}
-
-function verifyPaymentSignature(header: string | null): boolean {
-  if (!header) return false;
-  // Placeholder verifier: real x402 facilitator verification lands with the
-  // @x402 SDK wiring. Format-checked length only; flags failures for watch.
-  return header.length >= 16 && header.length <= 4096;
-}
-
 export const POST = withApi(async ({ req }) => {
   const headers = rateLimitFor("compute", req);
   const bodyRaw = await readJsonBody(req);
@@ -80,11 +44,7 @@ export const POST = withApi(async ({ req }) => {
   // In production this fails closed: a guessed header can never clear payment.
   const paymentSig =
     req.headers.get("x-payment-signature") || req.headers.get("payment-signature");
-  const paid =
-    (Boolean(paymentSig) &&
-      env.x402.acceptUnverifiedSignatures &&
-      verifyPaymentSignature(paymentSig)) ||
-    (Boolean(body.demoPayment) && env.demo.allowUnpaid);
+  const paid = isPaid(paymentSig, Boolean(body.demoPayment));
 
   // After schema parsing `chain` is fully resolved; the zod input type lanes
   // it as optional — reassert for the call sites below.
@@ -161,6 +121,30 @@ export const POST = withApi(async ({ req }) => {
   const backend = getConfidentialBackend(backendKind);
   const marginResult = await backend.netTwoParty(bookA, bookB);
 
+  // Verifiable output: register the commitment. Only one-way hashes are
+  // stored — never legs — so /net-margin/verify can prove registration from
+  // a party's OWN inputs without ever reading the counterparty's book.
+  let commitmentHash: string | null = null;
+  if (marginResult.computationId) {
+    const partyLegHashes = { A: hashLegs(legsA), B: hashLegs(legsB) };
+    commitmentHash = computeCommitmentHash({
+      partyLegHashes,
+      computationId: marginResult.computationId,
+      backendKind,
+    });
+    registerComputation({
+      computationId: marginResult.computationId,
+      chain: chainL,
+      backendKind,
+      commitmentHash,
+      partyLegHashes,
+      combinedNettedUsd: marginResult.nettedCombinedUsd,
+      grossNotionalUsd: marginResult.grossNotionalUsd,
+      perPartySiloedUsd: { A: marginResult.siloedAUsd, B: marginResult.siloedBUsd },
+      createdAt: Date.now(),
+    });
+  }
+
   // Aggregate-only summary (privacy invariant: never echo per-leg plaintext).
   const venues = Array.from(
     new Set([...bookA.legs.map((l) => l.venue), ...bookB.legs.map((l) => l.venue)]),
@@ -172,6 +156,7 @@ export const POST = withApi(async ({ req }) => {
     legsA: legsA.length,
     legsB: legsB.length,
     savingsUsd: marginResult.savingsUsd,
+    committed: Boolean(commitmentHash),
   });
 
   return NextResponse.json({
@@ -181,6 +166,7 @@ export const POST = withApi(async ({ req }) => {
     partyAWallet: bookA.wallet,
     partyBWallet: bookB.wallet,
     warnings: [...warnA, ...warnB],
+    ...(commitmentHash ? { commitmentHash } : {}),
     bookSummary: {
       legCountA: bookA.legs.length,
       legCountB: bookB.legs.length,
