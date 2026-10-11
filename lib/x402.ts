@@ -58,7 +58,9 @@ export function paymentRequired(chain: Chain): PaymentRequirement {
  */
 export function isPaid(paymentSignature: string | null, demoPayment: boolean): boolean {
   const wellFormed =
-    Boolean(paymentSignature) && paymentSignature.length >= 16 && paymentSignature.length <= 4096;
+    typeof paymentSignature === "string" &&
+    paymentSignature.length >= 16 &&
+    paymentSignature.length <= 4096;
   const viaReceipt = wellFormed && env.x402.acceptUnverifiedSignatures;
   const viaDemo = Boolean(demoPayment) && env.demo.allowUnpaid;
   return viaReceipt || viaDemo;
