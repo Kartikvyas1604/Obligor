@@ -18,7 +18,7 @@ import { NettingCalculator } from "@/components/netting-calculator";
 import { WalletConnect } from "@/components/wallet-connect";
 import { EscrowVaultCard } from "@/components/escrow-vault-card";
 import { PositionBuilderModal } from "@/components/position-builder-modal";
-import { type BackendKind, type PositionBook, type PositionLeg, type PartyId } from "@/lib/margin";
+import { type BackendKind, type NettingPartyId, type PositionBook, type PositionLeg, type PartyId } from "@/lib/margin";
 import { getConfidentialBackend } from "@/lib/confidential";
 
 const STAGES_SOLANA = [
@@ -72,7 +72,7 @@ function validateWallet(value: string): string | null {
   return null;
 }
 
-function resign(leg: PositionLeg, party: PartyId): PositionLeg {
+function resign(leg: PositionLeg, party: NettingPartyId): PositionLeg {
   const side = leg.side;
   const signed = side === "short" || side === "borrow" ? -Math.abs(leg.notionalUsd) : Math.abs(leg.notionalUsd);
   return { ...leg, party, signedExposureUsd: signed };

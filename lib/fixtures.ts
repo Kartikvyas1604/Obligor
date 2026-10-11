@@ -6,10 +6,10 @@
  * the UI. Demo endpoints requiring DEMO_ALLOW_FIXTURES before serving.
  */
 
-import type { PositionBook, PositionLeg } from "@/lib/margin";
+import type { NettingPartyId, PositionBook, PositionLeg } from "@/lib/margin";
 
 const leg = (
-  party: "A" | "B",
+  party: NettingPartyId,
   venue: PositionLeg["venue"],
   instrument: string,
   bucket: string,
@@ -57,6 +57,26 @@ export const solanaPartyB: PositionBook = {
     leg("B", "kamino", "SOL borrow", "SOL", "borrow", 10_000, -10_000, 0.1, 142.5),
   ],
 };
+
+export const solanaPartyC: PositionBook = {
+  party: "C",
+  label: "Netting Pool Desk C (demo)",
+  wallet: "Bm4Jq7r2VhQc9T5pK1sFxZbD6gW8yN3uMaE4tH7wY2xU",
+  chain: "solana",
+  warnings: ["Demo fixture book — quantities are examples, not live positions"],
+  legs: [
+    leg("C", "drift", "BTC-PERP", "BTC", "short", 28_000, -28_000, 0.15, 62_000),
+    leg("C", "mock_equity", "tAAPL short", "AAPL", "short", 50_000, -50_000, 0.25, 190),
+    leg("C", "kamino", "USDC borrow", "USD", "borrow", 25_000, -25_000, 0.1, 1),
+  ],
+};
+
+/**
+ * Three desks that net to a tiny residual: A is long SOL+margins, B is short
+ * SOL (drift), C carries the counter-exposure in BTC/AAPL/USD. Nothing here is
+ * a live position — every leg is source:"demo".
+ */
+export const solanaThreeParty: PositionBook[] = [solanaPartyA, solanaPartyB, solanaPartyC];
 
 export const adversarialBooks: { a: PositionBook; b: PositionBook } = {
   a: {

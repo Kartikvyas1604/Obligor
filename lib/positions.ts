@@ -11,7 +11,7 @@
  */
 
 import { z } from "zod";
-import { type PositionBook, type PositionLeg, type Side } from "./margin";
+import { type NettingPartyId, type PositionBook, type PositionLeg, type Side } from "./margin";
 import { env } from "./env";
 import { fetchLivePythPrice, type OraclePrice } from "./adapters/pyth";
 import { BUCKET_ORACLE_SYMBOL } from "./adapters/venues";
@@ -110,7 +110,7 @@ export async function buildOraclePricedLeg(
  * by the API layer).
  */
 export async function priceAndNormalizeLegs(
-  party: "A" | "B",
+  party: NettingPartyId,
   rawLegs: unknown,
   options: PriceOptions,
 ): Promise<PricedBook> {
@@ -221,7 +221,7 @@ export async function priceAndNormalizeLegs(
 
 /** Build a labeled empty book for a wallet (in-session placeholder). */
 export function emptyBook(
-  party: "A" | "B",
+  party: NettingPartyId,
   wallet: string,
   chain: PositionBook["chain"],
   label?: string,
