@@ -185,16 +185,26 @@ Obligor explicitly labels what is real code, what is fixture, and what is out of
 Base URL: `http://localhost:3000` (or `http://localhost:4021`)
 
 ### `GET /api/v1/health`
-Health check and backend capability discovery.
+Health check and backend capability discovery. Shape (abridged — see the route for the full `config` surface):
 ```json
 {
   "ok": true,
-  "name": "obligor-clearing-engine",
   "version": "0.1.0",
   "twoParty": true,
-  "chains": {
-    "solana": { "cluster": "devnet", "backend": "arcium", "x402": true },
-    "monad": { "cluster": "testnet", "backend": "enclave", "parallelPairs": true }
+  "formula": "two_party_netted_bucket_haircut",
+  "config": {
+    "demoFixturesEnabled": true,
+    "payments": { "solana": true, "monad": false },
+    "storeMode": "file",
+    "sessionCount": 0,
+    "maxLegsPerBook": 16,
+    "x402": {
+      "priceUsd": 0.01,
+      "networks": {
+        "solana": { "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1", "asset": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", "enabled": true },
+        "monad": { "network": "eip155:10143", "asset": "0x534b2f3A21130d7a60830c2Df862319e593943A3", "enabled": false, "gate": "X402_MONAD_ENABLED" }
+      }
+    }
   }
 }
 ```
@@ -236,12 +246,16 @@ Computes two-party confidential net margin. Unpaid calls receive `402 PAYMENT-RE
     "nettedCombinedUsd": 24500,
     "savingsUsd": 22000,
     "backend": "arcium",
-    "trustModel": "cryptographic_mpc",
+    "trustModel": "simulated_plaintext_compute",
+    "simulationNote": "MPC circuit is compiled in programs/obligor-mxe — this run executed the exact formula as sealed-execution simulation (no real encryption). Trust model not claimed.",
     "computationId": "arc_mxe_m2k19_8fa21"
   },
+  "commitmentHash": "sha256:…",
   "disclaimer": "Two-party confidential clearing demo. Other party's legs omitted by design."
 }
 ```
+
+> **Trust model honesty:** `trustModel` above is what an un-wired build actually returns — `simulated_plaintext_compute`. It only ever reports `cryptographic_mpc` / `hardware_attested_tee` when `CONFIDENTIAL_REAL_TRANSPORTS=true` and the real backend is connected (then it fails closed rather than simulating). The example correctly shows the default behavior, not the aspiration.
 
 > **Strict Privacy Invariant:** The confidential endpoint response strictly omits all individual position legs (`legs` array). Only aggregate book counts, venue lists, and net margin scalars are returned. Full legs remain private to each party's local wallet.
 
@@ -297,8 +311,12 @@ Obligor/
 │   ├── demo-agent-a.ts          # Party A x402 client script
 │   ├── demo-agent-b.ts          # Party B x402 client script
 │   ├── demo-agent-monad.ts      # Monad parallel epoch client script
-│   ├── test-margin.ts           # Mathematical engine test suite
 │   └── verify-x402-networks.ts  # x402 facilitator probe
+├── tests/
+│   ├── margin.test.ts           # Mathematical engine test suite
+│   ├── rate-limit.test.ts
+│   ├── session-auth.test.ts
+│   └── session-store.test.ts
 ├── brand.md                     # Design system guidelines
 ├── CONTRIBUTING.md              # Architectural rules & contribution guide
 ├── package.json
@@ -326,8 +344,8 @@ Open [http://localhost:3000](http://localhost:3000) to view the application.
 
 ### Verification & Testing
 ```bash
-# 1. Run mathematical margin engine test suite (pure TS unit tests)
-npm run test:margin
+# 1. Run the full unit test suite (margin engine, rate limiter, session store, escrow math, deal auth)
+npm test
 
 # 2. Verify x402 facilitator networks on Solana devnet and Monad testnet
 npm run verify:x402
