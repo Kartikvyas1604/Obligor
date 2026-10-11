@@ -43,3 +43,14 @@ export function registerComputation(record: ComputationRecord): ComputationRecor
 export function getComputation(computationId: string): ComputationRecord | null {
   return registry.get(computationId) ?? null;
 }
+
+/** Live privacy-invariant check: confirm the registry holds no plaintext legs. */
+export function registryStoresLegs(): boolean {
+  for (const record of registry.values()) {
+    const r = record as unknown as Record<string, unknown>;
+    if ("legs" in r || "legsA" in r || "legsB" in r || Array.isArray(r.partyLegs)) {
+      return true;
+    }
+  }
+  return false;
+}

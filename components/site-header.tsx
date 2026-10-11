@@ -13,6 +13,7 @@ const LINKS = [
   { href: "/deal", label: "Deal rooms" },
   { href: "/monad", label: "Monad" },
   { href: "/agents", label: "Agents" },
+  { href: "/security", label: "Security" },
   { href: "/trust", label: "Trust" },
 ];
 
