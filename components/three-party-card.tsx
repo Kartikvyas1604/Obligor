@@ -262,7 +262,6 @@ export function ThreePartyCard() {
               <thead>
                 <tr className="border-b border-border">
                   <th scope="col" className="px-3 py-2 font-medium">Bucket</th>
-                  <th scope="col" className="px-3 py-2 text-right font-medium">Gross notional</th>
                   <th scope="col" className="px-3 py-2 text-right font-medium">Net exposure</th>
                   <th scope="col" className="px-3 py-2 text-right font-medium">Haircut</th>
                   <th scope="col" className="px-3 py-2 text-right font-medium">Margin</th>
@@ -272,9 +271,6 @@ export function ThreePartyCard() {
                 {result.margin.buckets.map((b) => (
                   <tr key={b.bucket} className="border-b border-border/60 last:border-0">
                     <td className="px-3 py-2 font-mono text-xs">{b.bucket}</td>
-                    <td className="px-3 py-2 text-right font-mono text-muted-foreground">
-                      {usd(b.exposureUsd, 0)}
-                    </td>
                     <td className="px-3 py-2 text-right font-mono">{usd(b.exposureUsd)}</td>
                     <td className="px-3 py-2 text-right font-mono">{Math.round(b.haircut * 100)}%</td>
                     <td className="px-3 py-2 text-right font-mono text-success">{usd(b.imUsd)}</td>
@@ -292,7 +288,7 @@ export function ThreePartyCard() {
               </span>
             )}{" "}
             {result.warnings && result.warnings.length > 0
-              ? `· ${result.warnings.length} warning(s), see console.`
+              ? `· ${result.warnings.length} warning(s), listed in the raw API response.`
               : "· Aggregate-only output — no per-leg plaintext leaves the server."}
           </p>
         </div>
