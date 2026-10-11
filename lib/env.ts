@@ -105,6 +105,25 @@ const envSchema = z.object({
     // Keep serving last-known marks rather than failing a session entirely.
     fallbackEnabled: boolish(true),
   }),
+
+  drift: z.object({
+    // Mainnet Drift user authority (base58). When unset the venue adapter
+    // reports desk-declared exposure as unverified — never fabricated.
+    authority: z.string().optional().default(""),
+    subAccountId: z
+      .string()
+      .optional()
+      .transform((v) => {
+        const n = Number(v);
+        return Number.isInteger(n) && n >= 0 ? n : 0;
+      }),
+    // Official Drift Data API (self-hostable); envelope may be overridden.
+    dataApiBase: z
+      .string()
+      .optional()
+      .default("https://data.api.drift.trade"),
+    subAccountCacheMs: positiveInt(30_000),
+  }),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -150,6 +169,12 @@ function load(): Env {
     oracle: {
       stalenessMs: process.env.ORACLE_STALENESS_MS,
       fallbackEnabled: process.env.ORACLE_FALLBACK_ENABLED,
+    },
+    drift: {
+      authority: process.env.DRIFT_AUTHORITY,
+      subAccountId: process.env.DRIFT_SUBACCOUNT_ID,
+      dataApiBase: process.env.DRIFT_DATA_API_BASE,
+      subAccountCacheMs: process.env.DRIFT_SUBACCOUNT_CACHE_MS,
     },
   });
 

@@ -4,7 +4,7 @@ import { ApiError, parseBody, rateLimitFor, readJsonBody, withApi } from "@/lib/
 import { chainSchema } from "@/lib/env";
 import { isPaid, paymentRequired } from "@/lib/x402";
 import { getConfidentialBackend } from "@/lib/confidential";
-import { priceAndNormalizeLegs } from "@/lib/positions";
+import { priceAndNormalizeLegsWithVenueCheck as priceAndNormalizeLegs } from "@/lib/positions";
 import { makeLogger } from "@/lib/logger";
 import { computeCommitmentHash, hashLegs } from "@/lib/commitment";
 import { registerComputation } from "@/lib/computation-registry";

@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { ApiError, parseBody, rateLimitFor, readJsonBody, withApi } from "@/lib/http";
 import { env, chainSchema } from "@/lib/env";
 import { isPaid, paymentRequired } from "@/lib/x402";
-import { priceAndNormalizeLegs } from "@/lib/positions";
+import { priceAndNormalizeLegsWithVenueCheck as priceAndNormalizeLegs } from "@/lib/positions";
 import { rawLegSchema } from "@/lib/contracts";
 import { nPartyNetted, type ChainId } from "@/lib/margin";
 import { makeLogger } from "@/lib/logger";

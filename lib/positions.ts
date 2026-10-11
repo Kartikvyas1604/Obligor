@@ -15,6 +15,7 @@ import { type NettingPartyId, type PositionBook, type PositionLeg, type Side } f
 import { env } from "./env";
 import { fetchLivePythPrice, type OraclePrice } from "./adapters/pyth";
 import { BUCKET_ORACLE_SYMBOL } from "./adapters/venues";
+import { fetchDriftSubAccount, PERP_INSTRUMENT_FOR_BUCKET } from "./adapters/drift";
 import { makeLogger } from "./logger";
 import { ApiError } from "./http";
 
@@ -217,6 +218,87 @@ export async function priceAndNormalizeLegs(
   }
 
   return { legs, warnings, priceSources };
+}
+
+/** Validate + price legs, then add venue (Drift) verification annotations. */
+export async function priceAndNormalizeLegsWithVenueCheck(
+  party: NettingPartyId,
+  rawLegs: unknown,
+  options: PriceOptions,
+): Promise<PricedBook> {
+  const priced = await priceAndNormalizeLegs(party, rawLegs, options);
+  await driftVenueAnnotations(priced.legs, priced.warnings);
+  return priced;
+}
+
+/**
+ * Venue provenance for Drift legs. Real read path with loud degradation:
+ * - DRIFT_AUTHORITY unset  → honest "desk-declared, unverified" annotation.
+ * - Data API unreachable   → advisory warning, compute proceeds as an
+ *   internal simulation (never silently substitutes venue data).
+ * - On-chain exposure read → per-bucket match/mismatch vs the desk book.
+ */
+async function driftVenueAnnotations(
+  legs: PositionLeg[],
+  warnings: string[],
+): Promise<void> {
+  const driftLegs = legs.filter((l) => l.venue === "drift");
+  if (driftLegs.length === 0) return;
+
+  const buckets = Array.from(new Set(driftLegs.map((l) => l.bucket)));
+  const deskUsdByBucket = new Map<string, number>();
+  for (const l of driftLegs) {
+    deskUsdByBucket.set(
+      l.bucket,
+      (deskUsdByBucket.get(l.bucket) ?? 0) + Math.abs(l.signedExposureUsd),
+    );
+  }
+  const shortByBucket = new Map<string, boolean>();
+  for (const l of driftLegs) {
+    if (!shortByBucket.has(l.bucket)) shortByBucket.set(l.bucket, l.side === "short");
+  }
+
+  if (!env.drift.authority) {
+    warnings.push(
+      `venue drift: no subaccount linked (DRIFT_AUTHORITY unset) — exposure is desk-declared, not venue-verified`,
+    );
+    return;
+  }
+
+  try {
+    const sub = await fetchDriftSubAccount();
+    const tag = `venue drift: verified against mainnet subaccount ${sub.authority.slice(0, 6)}…${sub.authority.slice(-4)} (id ${sub.subAccountId})`;
+    const exposureByBucket = new Map<string, { usd: number; short: boolean }>();
+    for (const e of sub.perpExposures) {
+      exposureByBucket.set(e.bucket, { usd: e.usd, short: e.side === "short" });
+    }
+
+    for (const bucket of buckets) {
+      const deskUsd = deskUsdByBucket.get(bucket) ?? 0;
+      const onchain = exposureByBucket.get(bucket);
+      if (!onchain) {
+        warnings.push(
+          `venue drift: no on-chain ${PERP_INSTRUMENT_FOR_BUCKET[bucket] ?? bucket} position for ${bucket} — desk exposure ${deskUsd.toFixed(0)} USD could not be verified`,
+        );
+        continue;
+      }
+      const sideOk =
+        shortByBucket.get(bucket) === undefined || shortByBucket.get(bucket) === onchain.short;
+      const tolerance = Math.max(20, deskUsd * 0.05);
+      if (sideOk && Math.abs(onchain.usd - deskUsd) <= tolerance) {
+        log.info("drift venue match", { bucket, deskUsd, onchainUsd: onchain.usd });
+      } else {
+        warnings.push(
+          `venue drift: mismatch on ${bucket} — desk declares ${deskUsd.toFixed(0)} USD ${shortByBucket.get(bucket) ? "short" : "long"}, mainnet shows ${onchain.usd.toFixed(0)} USD ${onchain.short ? "short" : "long"}`,
+        );
+      }
+    }
+    warnings.push(tag);
+  } catch (err) {
+    warnings.push(
+      `venue drift: ${err instanceof Error ? err.message : String(err)} — net proceeds as internal simulation`,
+    );
+  }
 }
 
 /** Build a labeled empty book for a wallet (in-session placeholder). */
