@@ -57,10 +57,9 @@ export function paymentRequired(chain: Chain): PaymentRequirement {
  * fails closed — a guessed header can never clear payment.
  */
 export function isPaid(paymentSignature: string | null, demoPayment: boolean): boolean {
-  if (!paymentSignature) return false;
-  const wellFormed = paymentSignature.length >= 16 && paymentSignature.length <= 4096;
-  return (
-    (wellFormed && env.x402.acceptUnverifiedSignatures) ||
-    (Boolean(demoPayment) && env.demo.allowUnpaid)
-  );
+  const wellFormed =
+    Boolean(paymentSignature) && paymentSignature.length >= 16 && paymentSignature.length <= 4096;
+  const viaReceipt = wellFormed && env.x402.acceptUnverifiedSignatures;
+  const viaDemo = Boolean(demoPayment) && env.demo.allowUnpaid;
+  return viaReceipt || viaDemo;
 }

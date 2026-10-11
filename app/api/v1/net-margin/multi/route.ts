@@ -4,7 +4,8 @@ import { randomBytes } from "node:crypto";
 import { ApiError, parseBody, rateLimitFor, readJsonBody, withApi } from "@/lib/http";
 import { env, chainSchema } from "@/lib/env";
 import { isPaid, paymentRequired } from "@/lib/x402";
-import { priceAndNormalizeLegs, rawLegsSchema } from "@/lib/positions";
+import { priceAndNormalizeLegs } from "@/lib/positions";
+import { rawLegSchema } from "@/lib/contracts";
 import { nPartyNetted, type ChainId } from "@/lib/margin";
 import { makeLogger } from "@/lib/logger";
 import { computeCommitmentHash, hashLegs } from "@/lib/commitment";
@@ -15,7 +16,7 @@ const log = makeLogger("net-margin-multi");
 const partySchema = z.object({
   party: z.enum(["A", "B", "C"]),
   wallet: z.string().trim().min(1).max(64),
-  legs: z.array(rawLegsSchema.element).min(1).max(env.positions.maxLegsPerBook),
+  legs: z.array(rawLegSchema).min(1).max(env.positions.maxLegsPerBook),
 });
 
 const bodySchema = z.object({

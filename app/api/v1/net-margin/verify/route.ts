@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ApiError, parseBody, rateLimitFor, readJsonBody, withApi } from "@/lib/http";
-import { priceAndNormalizeLegs, rawLegsSchema } from "@/lib/positions";
+import { priceAndNormalizeLegs } from "@/lib/positions";
+import { rawLegSchema } from "@/lib/contracts";
 import { siloedIm } from "@/lib/margin";
 import { hashLegs } from "@/lib/commitment";
 import { getComputation } from "@/lib/computation-registry";
@@ -13,7 +14,7 @@ const bodySchema = z.object({
   computationId: z.string().trim().min(8).max(64),
   commitmentHash: z.string().trim().min(8).max(80),
   party: z.enum(["A", "B", "C"]),
-  legs: z.array(rawLegsSchema.element).min(1).max(32),
+  legs: z.array(rawLegSchema).min(1).max(32),
 });
 
 /**
