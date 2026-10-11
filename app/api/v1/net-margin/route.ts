@@ -38,13 +38,14 @@ export const POST = withApi(async ({ req }) => {
   const chain = body.chain;
   const backendKind: BackendKind = body.backend ?? (chain === "monad" ? "enclave" : "arcium");
 
-  // x402 enforcement. Receipts are cryptographically verified once the @x402
-  // SDK wiring lands; until then the verifier is a format check that runs
-  // ONLY under the explicit X402_ACCEPT_UNVERIFIED_SIGNATURES escape hatch.
-  // In production this fails closed: a guessed header can never clear payment.
+  // x402 enforcement. Obligor signed receipts are cryptographically verified
+  // (ed25519 over the exact challenge terms, one-time nonce). A forged or
+  // tampered envelope is rejected outright; a well-formed-but-unverified header
+  // clears payment ONLY under the explicit X402_ACCEPT_UNVERIFIED_SIGNATURES
+  // escape hatch. In production this fails closed.
   const paymentSig =
     req.headers.get("x-payment-signature") || req.headers.get("payment-signature");
-  const paid = isPaid(paymentSig, Boolean(body.demoPayment));
+  const paid = isPaid(paymentSig, Boolean(body.demoPayment), chain);
 
   // After schema parsing `chain` is fully resolved; the zod input type lanes
   // it as optional — reassert for the call sites below.

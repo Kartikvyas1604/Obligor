@@ -174,7 +174,7 @@ Obligor explicitly labels what is real code, what is fixture, and what is out of
 | **Hardware attestation** | **Not claimed** | `hardware_attested_tee` is returned **only** when the enclave returns a verified hardware quote (`attestation.verified === true` with a non-empty `quote_hex`). The current enclave returns `provider:"none", verified:false` plus a SHA256 proof-of-execution digest, so no TEE is claimed. A genuine Nitro/Oyster NSM attestation document is the only thing that ever flips `verified`. |
 | **Mock Equity `tAAPL`** | **Mock** | Priced from the live Pyth AAPL mark; adapter-ready for xStocks/Backed rails; never custody |
 | **Parallel Multi-Pair Clearing** | **Real** | `/api/v1/net-margin/parallel` nets ≥3 desk pairs concurrently per epoch (server-enforced minimum); trust model labeled from execution |
-| **x402 V2 Machine Payments** | **Partial — honest** | 402 challenge built from env terms is real, and the Monad facilitator (`x402-facilitator.molandak.org/supported`) is live-verified by `npm run verify:x402`. Payment *settlement verification* is format-check until the `@x402` SDK wiring lands; `SOLANA_PAY_TO`/`MONAD_PAY_TO` gates enablement per chain. |
+| **x402 V2 Machine Payments** | **Real verification — honest** | 402 challenge built from env terms is real; the Monad facilitator (`x402-facilitator.molandak.org/supported`) is live-verified by `npm run verify:x402`. Obligor signed receipts are **cryptographically verified** (ed25519 over `network/asset/payTo/amount` + one-time nonce) with `node:crypto` via `lib/x402.ts`; a forged/tampered envelope is rejected outright (`X402_REQUIRE_VERIFIED_SIGNATURES` forces fail-closed). The legacy format-check escape hatch is dev-only. The envelope is Obligor's own wire format — Coinbase x402 "exact" on-chain settlement (`@x402` SDK) is the tracked interop follow-up. `SOLANA_PAY_TO`/`MONAD_PAY_TO` gates enablement per chain. |
 | **Bilateral escrow** | **Partial** | Deposit + release envelopes are real validated APIs (`/v1/escrow/*`) wired to the UI; on-chain lock/transfer executes in the escrow contract repo — the API never fabricates a transaction hash or claims funds moved. |
 | **Capital Movement / Liquidation** | **Not Built** | Margin analytics only; Obligor does not custody or withdraw venue funds |
 
@@ -497,9 +497,11 @@ idempotency store for a shared one (Redis/Postgres), then run multiple instances
 - **Per-protocol on-chain position decoding** (Kamino/Drift obligation parsing) is
   adapter-ready but not included; books enter via desk input, the deal-room flow, or
   the API, and get priced by live oracle marks.
-- **x402 signature verification is format-check only** until the `@x402` SDK wiring;
-  payment enforcement (402 → paid) is real, cryptographic settlement verification is
-  a follow-up.
+- **x402 receipt verification is real but uses Obligor's own envelope.** Signed
+  receipts are ed25519-verified (`node:crypto`) over the challenge terms with a
+  one-time nonce, and fail closed. It is *not* the Coinbase x402 "exact" on-chain
+  payload (a base64 partially-signed transaction requiring the `@x402` SDK); wiring
+  that for byte-for-byte facilitator interop is the tracked follow-up.
 - The file session store is single-instance; `SESSION_STORE_MODE=sqlite` (node:sqlite,
   no external service) lets several app processes share one volume, but a true
   multi-machine deployment still needs the Postgres/Redis implementation of the same

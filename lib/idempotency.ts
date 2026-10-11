@@ -178,3 +178,24 @@ export function recordIdempotent<T extends object>(
 export function generateIdempotencyKey(): string {
   return `idem_${Date.now().toString(36)}_${randomUUID().slice(0, 8)}`;
 }
+
+/**
+ * Atomically claims a one-time key (e.g. an x402 receipt nonce). Returns true
+ * on the first claim, false if the key was already recorded and not yet
+ * expired. Shares the idempotency backend, so replay protection is consistent
+ * across processes on a shared sqlite volume. (The check-then-put window is
+ * small; a stricter multi-writer guarantee can move into the sqlite backend.)
+ */
+export function markOnce(key: string, ttlMs: number = TTL_MS): boolean {
+  const b = backend();
+  if (b.get(key)) return false;
+  const now = Date.now();
+  b.put({
+    key,
+    requestFingerprint: "once",
+    recordedAt: now,
+    expiresAt: now + ttlMs,
+    response: { at: now },
+  });
+  return true;
+}

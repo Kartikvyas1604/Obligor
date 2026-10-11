@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "verify:x402": "npx -y tsx scripts/verify-x402-networks.ts",
+    "x402:sign": "npx -y tsx scripts/sign-x402-receipt.ts",
     "verify:security": "npx -y tsx scripts/security-contract-check.ts",
     "verify:load": "npx -y tsx scripts/load-sweep.ts",
     "demo:agent-a": "npx -y tsx scripts/demo-agent-a.ts",

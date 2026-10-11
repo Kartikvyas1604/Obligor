@@ -96,9 +96,15 @@ const envSchema = z.object({
     // enabled. Keeps the "else Solana-only x402 + honest README" path from
     // AGENT.md real: MONAD_PAY_TO alone never silently enables Monad payments.
     monadEnabled: boolish(false),
-    // Receipt verification is wired when the @x402 SDK lands. Until then an
-    // unverified receipt header is accepted ONLY under this explicit escape
-    // hatch (dev default ON like the demo flags, locked OFF in production).
+    // Receipt verification: Obligor's signed-receipt envelope is verified with
+    // node:crypto ed25519 whenever a chain challenge exists (payTo/asset/network
+    // match + amount + signature). This flag forces FAIL-CLOSED: any receipt that
+    // is not a cryptographically valid envelope is rejected, ignoring the dev
+    // escape hatch below. Locked OFF by default; recommended ON in production.
+    requireVerifiedSignatures: boolish(false),
+    // Legacy escape hatch: a well-formed (but UNVERIFIED) receipt header clears
+    // payment. Dev default ON, locked OFF in production. Ignored entirely when
+    // requireVerifiedSignatures is true.
     acceptUnverifiedSignatures: boolish(!isProdBuild),
   }),
 
@@ -174,6 +180,7 @@ function load(): Env {
       facilitatorUrlSolana: process.env.FACILITATOR_URL_SOLANA,
       facilitatorUrlMonad: process.env.FACILITATOR_URL_MONAD,
       monadEnabled: process.env.X402_MONAD_ENABLED,
+      requireVerifiedSignatures: process.env.X402_REQUIRE_VERIFIED_SIGNATURES,
       acceptUnverifiedSignatures: process.env.X402_ACCEPT_UNVERIFIED_SIGNATURES,
     },
     positions: {
@@ -213,6 +220,11 @@ function load(): Env {
     if (cfg.x402.acceptUnverifiedSignatures) {
       log.warn(
         "X402_ACCEPT_UNVERIFIED_SIGNATURES is enabled in production — x402 receipts are NOT cryptographically verified and any well-formed header clears payment",
+      );
+    }
+    if (!cfg.x402.requireVerifiedSignatures) {
+      log.warn(
+        "X402_REQUIRE_VERIFIED_SIGNATURES is off — signed x402 receipts are still verified when present, but the enforce-everything mode is disabled (set true for a production-hard gate)",
       );
     }
     if (cfg.store.mode === "memory") {

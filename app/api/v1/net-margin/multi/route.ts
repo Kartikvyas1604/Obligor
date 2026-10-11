@@ -42,11 +42,11 @@ export const POST = withApi(async ({ req }) => {
   const chainL = body.chain;
 
   // x402 gate — same challenge construction and fail-closed policy as the
-  // two-party route. Receipts verify only under the escape hatch; production
-  // fails closed.
+  // two-party route: signed receipts are cryptographically verified; a
+  // forged/tampered envelope is rejected outright; anything else fails closed.
   const paymentSig =
     req.headers.get("x-payment-signature") || req.headers.get("payment-signature");
-  const paid = isPaid(paymentSig, Boolean(body.demoPayment));
+  const paid = isPaid(paymentSig, Boolean(body.demoPayment), chainL);
 
   if (!paid) {
     const challenge = paymentRequired(chainL);

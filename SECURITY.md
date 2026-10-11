@@ -35,14 +35,20 @@ These are disclosed by design, not bugs. They are labeled in the API responses
 and in the README, and they are the reasons this build is **not** yet
 mainnet-ready:
 
-- **x402 receipts are not cryptographically verified by default.** The verifier
-  is a format check that runs only under the explicit
-  `X402_ACCEPT_UNVERIFIED_SIGNATURES=true` escape hatch. In production this
-  fails closed — a well-formed header can never clear payment on its own.
-- **Confidential backends run in sealed-execution simulation by default.**
-  `trustModel` reports `simulated_plaintext_compute` unless
-  `CONFIDENTIAL_REAL_TRANSPORTS=true`. It never claims `cryptographic_mpc` or
-  `hardware_attested_tee` for a path that did not actually run that way.
+- **x402 receipts use Obligor's own signed envelope, not the Coinbase x402
+  "exact" on-chain payload.** Obligor signed receipts are cryptographically
+  verified (ed25519 over the challenge terms + one-time nonce) via
+  `node:crypto`; a forged/tampered envelope is rejected outright, and
+  `X402_REQUIRE_VERIFIED_SIGNATURES=true` forces fail-closed. The legacy
+  format-check remains only as a dev escape hatch
+  (`X402_ACCEPT_UNVERIFIED_SIGNATURES`). Byte-for-byte interop with the `@x402`
+  SDK's on-chain settlement payload is a tracked follow-up.
+- **Confidential backends: the enclave transport is real, attestation is not.**
+  `EnclaveBackend` sends both books to the real Rust enclave over HTTP and
+  consumes its output, but without a hardware attestation quote it reports
+  `simulated_plaintext_compute` (never `hardware_attested_tee`). `ArciumBackend`
+  runs the identical formula in sealed-execution simulation until the
+  `@arcium-hq/client` MXE lifecycle is wired.
 - **Escrow settlement returns a computed envelope, not an on-chain
   transaction.** No fabricated transaction hashes are ever returned. The real
   lock/transfer executes in the escrow contract repo.
