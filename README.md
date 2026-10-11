@@ -359,7 +359,14 @@ npm run demo:agent-b
 # 5. Run autonomous Monad parallel multi-pair epoch clearing agent
 npm run demo:agent-monad
 
-# 6. Run production build & ESLint validation
+# 6. Per-endpoint auth + validation contract check (run against a built server)
+npm run build && npx next start -p 3000 &
+npm run verify:security
+
+# 7. Load sweep against the paid clearing path (latency percentiles + throughput)
+npm run verify:load
+
+# 8. Production build & ESLint validation
 npm run build
 npm run lint
 ```
@@ -405,6 +412,48 @@ by them — the 402/x402 challenge is built from `X402_*` env terms and returns 
    (or gateway) in front until then.
 4. Rollback: deploy the previous build tag; sessions written in the newer schema are
    rejected on load and quarantined (`sessions.json.corrupt-*`) rather than crashing.
+
+### Backup & restore (file session store)
+
+With `SESSION_STORE_MODE=file`, all state is one atomically-written JSON file at
+`$DATA_DIR/sessions.json` (default `.data/sessions.json`). Writes go to a temp file and
+`rename()` into place, so a reader never sees a half-written store.
+
+```bash
+# Backup — a copy is always consistent (atomic rename means no torn writes)
+cp "$DATA_DIR/sessions.json" "backup/sessions-$(date +%Y%m%dT%H%M%S).json"
+
+# Restore — stop the instance, replace the file, start again
+cp backup/sessions-20260101T000000.json "$DATA_DIR/sessions.json"
+
+# Verify a restore before trusting it (tolerates TTL-expired and quarantined entries)
+node -e 'const s=require("./.data/sessions.json");console.log(Object.keys(s).length, "sessions")'
+```
+
+On load the store **TTL-evicts** entries older than `SESSION_TTL_MS` and quarantines a
+corrupt file (`sessions.json.corrupt-<ts>`) instead of crashing — so a restore from an
+older or newer schema degrades gracefully. Back up the file on the same cadence as your
+`SESSION_TTL_MS`; a restore that is older than the TTL simply yields fewer live rooms.
+Idempotency records and rate-limit buckets are in-memory only and are **not** part of the
+backup (see the multi-instance note above).
+
+### Load & performance (measured, not aspirational)
+
+`npm run verify:load` sweeps `POST /api/v1/net-margin` (paid path) and reports latency
+percentiles, throughput, and the privacy invariant across every 200. Measured on a single
+Node process (Apple silicon, local), one instance, live Pyth Hermes pricing per request:
+
+| Concurrency | Requests | p50 | p95 | p99 | Throughput |
+| --- | --- | --- | --- | --- | --- |
+| 10 | 60 | 63 ms | 164 ms | 184 ms | ~123 req/s |
+| 25 | 300 | 73 ms | 1043 ms | 1086 ms | ~67 req/s |
+
+Honest read: latency is **oracle-bound**, not math-bound — the margin formula itself is
+sub-millisecond; the bulk of p50 is the live Pyth fetch + venue pricing. Past ~10
+concurrent in-flight requests on a single process the tail climbs to ~1 s and throughput
+falls, because the event loop serializes oracle fetches. To scale: raise concurrency only
+after adding a shared oracle price cache and swapping the in-memory rate limiter /
+idempotency store for a shared one (Redis/Postgres), then run multiple instances.
 
 ### Operational guarantees in this build
 
