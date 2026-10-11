@@ -41,3 +41,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .data/
+
+# build caches
+/cache
+/crash
+*.tsbuildinfo
+
+# rust
+/enclave/**/target
