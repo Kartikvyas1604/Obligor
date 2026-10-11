@@ -18,6 +18,8 @@ import { NettingCalculator } from "@/components/netting-calculator";
 import { WalletConnect } from "@/components/wallet-connect";
 import { EscrowVaultCard } from "@/components/escrow-vault-card";
 import { PositionBuilderModal } from "@/components/position-builder-modal";
+import { VerifyResultChip } from "@/components/verify-chip";
+import { ThreePartyCard } from "@/components/three-party-card";
 import { type BackendKind, type NettingPartyId, type PositionBook, type PositionLeg, type PartyId } from "@/lib/margin";
 import { getConfidentialBackend } from "@/lib/confidential";
 
@@ -95,6 +97,8 @@ export default function ClearPage() {
 
   const [useLiveApi, setUseLiveApi] = useState(false);
   const [apiComputationId, setApiComputationId] = useState<string | null>(null);
+  const [apiCommitmentHash, setApiCommitmentHash] = useState<string | null>(null);
+  const [commitmentRegistered, setCommitmentRegistered] = useState(false);
   const [apiAttestation, setApiAttestation] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -266,6 +270,8 @@ export default function ClearPage() {
         if (response.ok) {
           const data = await response.json();
           setApiComputationId(data.margin?.computationId || null);
+          setApiCommitmentHash(data.commitmentHash || null);
+          setCommitmentRegistered(Boolean(data.commitmentHash));
           setApiAttestation(data.margin?.attestation?.quote || null);
         } else {
           const body = (await response.json().catch(() => null)) as { message?: string } | null;
@@ -282,6 +288,19 @@ export default function ClearPage() {
         const res = await backendInstance.netTwoParty(bookA, bookB);
         setApiComputationId(res.computationId);
         setApiAttestation(res.attestation?.quote || null);
+
+        // Register a server-side commitment in the background so the
+        // verifiable-output chip works even for in-browser computations. If
+        // the register call fails (or demo fixtures are gated), the chip
+        // renders disabled with an honest note.
+        const committed = await registerComputationForVerify(bookA, bookB, backend);
+        if (committed) {
+          setApiComputationId(committed.computationId);
+          setApiCommitmentHash(committed.commitmentHash);
+          setCommitmentRegistered(true);
+        } else {
+          setCommitmentRegistered(false);
+        }
       } catch {
         setApiError("Local netting failed — check the position books and retry.");
       }
@@ -301,6 +320,8 @@ export default function ClearPage() {
     setPhase("setup");
     setComputeError(null);
     setApiComputationId(null);
+    setApiCommitmentHash(null);
+    setCommitmentRegistered(false);
     setApiAttestation(null);
     setApiError(null);
   }
@@ -524,6 +545,8 @@ export default function ClearPage() {
 
         <NettingCalculator />
 
+        <ThreePartyCard />
+
         {phase === "computing" && (
           <section aria-label="Computing" aria-busy="true" className="anim-fade-up rounded-2xl border border-border bg-card p-6 space-y-4">
             <div className="flex items-center justify-between">
@@ -590,6 +613,15 @@ export default function ClearPage() {
                 </div>
               </div>
             )}
+
+            <div className="flex items-center gap-3">
+              <VerifyResultChip
+                computationId={apiComputationId}
+                commitmentHash={apiCommitmentHash}
+                registered={commitmentRegistered}
+                partyLegs={bookA.legs}
+              />
+            </div>
           </div>
         )}
 
@@ -693,4 +725,36 @@ function serializeLegs(legs: PositionLeg[], party: PartyId) {
     qty: l.qty,
     markUsd: l.markUsd,
   }));
+}
+
+/**
+ * Background server-side commitment for the in-browser compute path. Existing
+ * once so the verify chip has a registered computationId/commitmentHash to
+ * re-check against even when the math ran locally. Returns null when the API
+ * is unreachable or demo payment is disallowed — the chip then shows disabled.
+ */
+async function registerComputationForVerify(
+  bookA: PositionBook,
+  bookB: PositionBook,
+  backend: BackendKind,
+): Promise<{ computationId: string; commitmentHash: string } | null> {
+  try {
+    const res = await fetch("/api/v1/net-margin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chain: backend === "enclave" ? "monad" : "solana",
+        backend,
+        partyA: { wallet: bookA.wallet || "local-desk-a", legs: serializeLegs(bookA.legs, "A") },
+        partyB: { wallet: bookB.wallet || "local-desk-b", legs: serializeLegs(bookB.legs, "B") },
+        demoPayment: true,
+      }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { commitmentHash?: string; margin?: { computationId?: string } };
+    if (!data.commitmentHash || !data.margin?.computationId) return null;
+    return { computationId: data.margin.computationId, commitmentHash: data.commitmentHash };
+  } catch {
+    return null;
+  }
 }
