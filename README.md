@@ -413,6 +413,19 @@ by them — the 402/x402 challenge is built from `X402_*` env terms and returns 
 4. Rollback: deploy the previous build tag; sessions written in the newer schema are
    rejected on load and quarantined (`sessions.json.corrupt-*`) rather than crashing.
 
+**Container deploy.** `Dockerfile` builds a self-contained image (`next.config.ts` sets
+`output: "standalone"`): multi-stage `deps → build → runner`, non-root user, a
+`/data` volume for the file session store (`DATA_DIR=/data`), and a `HEALTHCHECK` that
+polls `GET /api/v1/health`. Secrets are supplied at `docker run` time, never baked in —
+`.dockerignore` excludes `.env*`. `.github/workflows/deploy.yml` builds the image,
+**boots it and asserts `/health` returns `ok:true`**, then pushes to GHCR. Run locally:
+
+```bash
+docker build -t obligor .
+docker run -p 3000:3000 -v obligor-data:/data \
+  -e SOLANA_PAY_TO=<wallet> obligor
+```
+
 ### Backup & restore (file session store)
 
 With `SESSION_STORE_MODE=file`, all state is one atomically-written JSON file at
