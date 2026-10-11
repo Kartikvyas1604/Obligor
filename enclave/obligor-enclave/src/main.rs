@@ -4,6 +4,9 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
+use std::thread;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PositionLeg {
@@ -141,5 +144,136 @@ pub fn compute_two_party_netted(
 }
 
 fn main() {
-    println!("Obligor TEE Enclave initialized. Listening on vsock:5000...");
+    let addr = std::env::var("OBLIGOR_ENCLAVE_ADDR").unwrap_or_else(|_| "127.0.0.1:5000".to_string());
+    let listener = match TcpListener::bind(&addr) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("Obligor TEE Enclave failed to bind {addr}: {e}");
+            std::process::exit(1);
+        }
+    };
+    println!("Obligor TEE Enclave initialized. Listening on {addr} (HTTP: GET /health, POST /net)");
+
+    for stream in listener.incoming() {
+        match stream {
+            Ok(s) => {
+                thread::spawn(move || handle_connection(s));
+            }
+            Err(e) => eprintln!("enclave accept error: {e}"),
+        }
+    }
+}
+
+/// Minimal HTTP/1.1 handler — no external crates so the enclave surface stays
+/// auditable. Handles GET /health and POST /net (JSON), Connection: close.
+fn handle_connection(mut stream: TcpStream) {
+    let mut buf = Vec::new();
+    // Read headers (up to the blank line) in bounded chunks.
+    let mut header_end = None;
+    let mut chunk = [0u8; 4096];
+    while header_end.is_none() {
+        match stream.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(n) => {
+                buf.extend_from_slice(&chunk[..n]);
+                header_end = find_subsequence(&buf, b"\r\n\r\n").map(|i| i + 4);
+                if buf.len() > 1024 * 1024 {
+                    break;
+                }
+            }
+            Err(_) => return,
+        }
+    }
+    let header_end = match header_end {
+        Some(i) => i,
+        None => {
+            respond(&mut stream, 400, "{\"ok\":false,\"error\":\"bad request\"}");
+            return;
+        }
+    };
+
+    let head = String::from_utf8_lossy(&buf[..header_end]).to_string();
+    let mut lines = head.lines();
+    let request_line = lines.next().unwrap_or("");
+    let mut parts = request_line.split_whitespace();
+    let method = parts.next().unwrap_or("");
+    let path = parts.next().unwrap_or("");
+
+    let content_length: usize = lines
+        .filter_map(|l| {
+            let lower = l.to_ascii_lowercase();
+            if let Some(rest) = lower.strip_prefix("content-length:") {
+                rest.trim().parse::<usize>().ok()
+            } else {
+                None
+            }
+        })
+        .next()
+        .unwrap_or(0);
+
+    // Read the remaining body up to content_length.
+    let mut body = buf[header_end..].to_vec();
+    while body.len() < content_length {
+        match stream.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(n) => body.extend_from_slice(&chunk[..n]),
+            Err(_) => break,
+        }
+    }
+    body.truncate(content_length);
+
+    match (method, path) {
+        ("GET", "/health") => respond(
+            &mut stream,
+            200,
+            "{\"ok\":true,\"service\":\"obligor-enclave\",\"hardware_attestation_available\":false}",
+        ),
+        ("POST", "/net") => {
+            let req: Result<EnclaveNettingRequest, _> = serde_json::from_slice(&body);
+            match req {
+                Ok(r) => {
+                    let resp = compute_two_party_netted(&r.session_id, &r.party_a_legs, &r.party_b_legs);
+                    match serde_json::to_string(&resp) {
+                        Ok(json) => respond(&mut stream, 200, &json),
+                        Err(e) => respond(
+                            &mut stream,
+                            500,
+                            &format!("{{\"ok\":false,\"error\":\"serialize: {e}\"}}"),
+                        ),
+                    }
+                }
+                Err(e) => respond(
+                    &mut stream,
+                    422,
+                    &format!("{{\"ok\":false,\"error\":\"invalid netting request: {e}\"}}"),
+                ),
+            }
+        }
+        _ => respond(&mut stream, 404, "{\"ok\":false,\"error\":\"not found\"}"),
+    }
+}
+
+fn respond(stream: &mut TcpStream, status: u16, body: &str) {
+    let reason = match status {
+        200 => "OK",
+        400 => "Bad Request",
+        404 => "Not Found",
+        422 => "Unprocessable Entity",
+        500 => "Internal Server Error",
+        _ => "OK",
+    };
+    let response = format!(
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let _ = stream.write_all(response.as_bytes());
+    let _ = stream.flush();
+}
+
+fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() || haystack.len() < needle.len() {
+        return None;
+    }
+    haystack.windows(needle.len()).position(|w| w == needle)
 }

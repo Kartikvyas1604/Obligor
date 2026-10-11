@@ -12,6 +12,11 @@
  * - With `CONFIDENTIAL_REAL_TRANSPORTS=true`, the real transport URL is
  *   required — a missing wire FAILS CLOSED (503-shaped error) instead of
  *   silently falling back to plaintext simulation.
+ * - The enclave transport (ENCLAVE_ENDPOINT + `enclave/obligor-enclave`) is a
+ *   real HTTP wire: the enclave computes the numbers and Node consumes them.
+ *   `hardware_attested_tee` is claimed ONLY when the enclave returns a verified
+ *   hardware quote; an un-attested enclave process reports
+ *   `simulated_plaintext_compute` with a note (never a fabricated attestation).
  */
 
 import {
@@ -36,6 +41,55 @@ export interface AttestationQuote {
   timestamp: string;
   pcr0?: string;
   enclaveMeasurement?: string;
+}
+
+/** Wire shape expected by `enclave/obligor-enclave` (snake_case, Rust structs). */
+interface EnclaveLeg {
+  party: string;
+  venue: string;
+  instrument: string;
+  bucket: string;
+  side: string;
+  qty: number;
+  notional_usd: number;
+  signed_exposure_usd: number;
+  haircut: number;
+  mark_usd: number;
+}
+
+interface EnclaveNettingResponse {
+  session_id: string;
+  siloed_a_usd: number;
+  siloed_b_usd: number;
+  siloed_combined_usd: number;
+  netted_combined_usd: number;
+  savings_usd: number;
+  gross_notional_usd: number;
+  net_exposure_usd: number;
+  buckets?: { bucket: string; exposure_usd: number; haircut: number; im_usd: number }[];
+  attestation?: {
+    provider: string;
+    verified: boolean;
+    quote_hex: string;
+    pcr0: string;
+    measurement: string;
+  };
+}
+
+/** Map camelCase PositionLeg → the enclave's snake_case wire struct. */
+function toEnclaveLeg(leg: PositionBook["legs"][number]): EnclaveLeg {
+  return {
+    party: leg.party,
+    venue: leg.venue,
+    instrument: leg.instrument,
+    bucket: leg.bucket,
+    side: leg.side,
+    qty: leg.qty,
+    notional_usd: leg.notionalUsd,
+    signed_exposure_usd: leg.signedExposureUsd,
+    haircut: leg.haircut,
+    mark_usd: leg.markUsd,
+  };
 }
 
 export interface ConfidentialNetMarginResult extends BaseNetMarginResult {
@@ -185,29 +239,71 @@ export class EnclaveBackend implements ConfidentialBackend {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           session_id: computationId,
-          party_a_legs: bookA.legs,
-          party_b_legs: bookB.legs,
+          party_a_legs: bookA.legs.map(toEnclaveLeg),
+          party_b_legs: bookB.legs.map(toEnclaveLeg),
         }),
         signal: AbortSignal.timeout(30_000),
+      }).catch((err: unknown) => {
+        // Transport unreachable — fail closed, never fall back to a local claim.
+        throw new Error(
+          `Enclave transport unreachable at ${ENCLAVE_ENDPOINT}/net: ${err instanceof Error ? err.message : String(err)}`,
+        );
       });
       if (!res.ok) {
         throw new Error(`Enclave computation failed (${res.status}) — failing closed, not simulating`);
       }
-      const data = (await res.json()) as {
-        attestation?: AttestationQuote;
+      const data = (await res.json()) as EnclaveNettingResponse;
+
+      // The enclave computed the numbers — use them, don't recompute locally.
+      const remote: BaseNetMarginResult = {
+        siloedAUsd: data.siloed_a_usd,
+        siloedBUsd: data.siloed_b_usd,
+        siloedCombinedUsd: data.siloed_combined_usd,
+        nettedCombinedUsd: data.netted_combined_usd,
+        savingsUsd: data.savings_usd,
+        grossNotionalUsd: data.gross_notional_usd,
+        netExposureUsd: data.net_exposure_usd,
+        buckets: (data.buckets ?? []).map((b) => ({
+          bucket: b.bucket,
+          exposureUsd: b.exposure_usd,
+          haircut: b.haircut,
+          imUsd: b.im_usd,
+        })),
+        perPartySiloedUsd: { A: data.siloed_a_usd, B: data.siloed_b_usd },
+        partyCount: 2,
       };
-      // Only claims attested TEE when the enclave actually returned a quote.
-      const attestation = data.attestation;
-      if (!attestation?.quote) {
-        throw new Error("Enclave returned no attestation quote — failing closed");
+
+      // Only claim hardware-attested TEE when the enclave returned a genuine,
+      // verified hardware quote. An un-attested run (e.g. the enclave binary on
+      // a normal host) reports the conservative label + an honest note.
+      const raw = data.attestation;
+      if (raw?.verified && raw.quote_hex) {
+        return {
+          ...remote,
+          backend: "enclave",
+          trustModel: "hardware_attested_tee",
+          computationId,
+          timestamp,
+          attestation: {
+            quote: raw.quote_hex,
+            verified: true,
+            provider: (raw.provider as AttestationQuote["provider"]) ?? "none",
+            timestamp,
+            pcr0: raw.pcr0,
+            enclaveMeasurement: raw.measurement,
+          },
+        };
       }
+
+      log.warn("enclave transport executed without a hardware attestation quote", { computationId });
       return {
-        ...base,
+        ...remote,
         backend: "enclave",
-        trustModel: "hardware_attested_tee",
+        trustModel: "simulated_plaintext_compute",
         computationId,
         timestamp,
-        attestation,
+        simulationNote:
+          "Executed over the real enclave transport (ENCLAVE_ENDPOINT), but no hardware attestation quote was returned — TEE is not claimed. trustModel conservatively reports simulated_plaintext_compute.",
       };
     }
 

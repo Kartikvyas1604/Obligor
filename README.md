@@ -170,8 +170,8 @@ Obligor explicitly labels what is real code, what is fixture, and what is out of
 | :--- | :--- | :--- |
 | **Two-Party Netting Formula** | **Real** | Pure TypeScript source of truth (`lib/margin.ts`) with golden tests; mirrored in the Arcis circuit and the Rust enclave |
 | **Position ingestion** | **Real (oracle-priced)** | Books enter via desk input, deal rooms, or the API; every mark re-priced against live Pyth Hermes with deviation/stale/fallback provenance labels. Fabricated per-party quantities were removed — positions are never invented. |
-| **Confidential execution (MPC / TEE)** | **Sealed-execution simulation** | The Arcis circuit (`programs/obligor-mxe/encrypted-ixs/`) and Rust enclave (`enclave/obligor-enclave/`) are real code and CI-compiled, but this deployment executes the identical formula locally. trustModel stays `simulated_plaintext_compute` — real MPC/TEE claimed only when `CONFIDENTIAL_REAL_TRANSPORTS=true` and the MXE/enclave transport is wired (then it **fails closed**, never silently simulates). |
-| **Hardware attestation** | **Not claimed** | The enclave returns `provider:"none", verified:false` plus a SHA256 proof-of-execution digest. A genuine Nitro/Oyster NSM attestation document is the only thing that ever flips `verified`. |
+| **Confidential execution (MPC / TEE)** | **Real wire (enclave) — un-attested** | The Rust enclave (`enclave/obligor-enclave/`) is a real, dep-free HTTP service (GET `/health`, POST `/net`); with `CONFIDENTIAL_REAL_TRANSPORTS=true` + `ENCLAVE_ENDPOINT`, Node **sends both books to it and consumes the enclave's output** (it does not recompute locally). Because no hardware attestation quote is issued outside a real Nitro/Oyster VM, trustModel stays `simulated_plaintext_compute` with an honest note. The Arcis circuit (`programs/obligor-mxe/`) remains CI-compiled sealed-execution simulation until the `@arcium-hq/client` MXE lifecycle is wired. An unconnected transport **fails closed**, never silently simulates. |
+| **Hardware attestation** | **Not claimed** | `hardware_attested_tee` is returned **only** when the enclave returns a verified hardware quote (`attestation.verified === true` with a non-empty `quote_hex`). The current enclave returns `provider:"none", verified:false` plus a SHA256 proof-of-execution digest, so no TEE is claimed. A genuine Nitro/Oyster NSM attestation document is the only thing that ever flips `verified`. |
 | **Mock Equity `tAAPL`** | **Mock** | Priced from the live Pyth AAPL mark; adapter-ready for xStocks/Backed rails; never custody |
 | **Parallel Multi-Pair Clearing** | **Real** | `/api/v1/net-margin/parallel` nets ≥3 desk pairs concurrently per epoch (server-enforced minimum); trust model labeled from execution |
 | **x402 V2 Machine Payments** | **Partial — honest** | 402 challenge built from env terms is real, and the Monad facilitator (`x402-facilitator.molandak.org/supported`) is live-verified by `npm run verify:x402`. Payment *settlement verification* is format-check until the `@x402` SDK wiring lands; `SOLANA_PAY_TO`/`MONAD_PAY_TO` gates enablement per chain. |
@@ -396,7 +396,7 @@ typed access in `lib/env.ts` — see [`.env.example`](.env.example) for the full
 | Staging | `file` (or `sqlite` on shared volume) | off | off | devnet/testnet USDC |
 | Production | `sqlite` (multi-process, shared volume) or `file` (single instance); swap the store impl for Postgres/Redis for multi-machine | **off (hard default)** | **off (hard default)** | real payTo wallets via `SOLANA_PAY_TO` / `MONAD_PAY_TO` |
 
-**Confidential execution gate:** `CONFIDENTIAL_REAL_TRANSPORTS=true` requires `ARCIUM_MXE_ENDPOINT` / `ENCLAVE_ENDPOINT` and makes uncon-nected transports **fail closed** (`CONFIDENTIAL_UNAVAILABLE`) instead of silently simulating. Leave it `false` only where labeled simulation is the intent (demos, CI); the run's trust model is always whatever actually executed.
+**Confidential execution gate:** `CONFIDENTIAL_REAL_TRANSPORTS=true` requires `ARCIUM_MXE_ENDPOINT` / `ENCLAVE_ENDPOINT` and makes unconnected transports **fail closed** (`CONFIDENTIAL_UNAVAILABLE`) instead of silently simulating. The enclave wire is live today — run `OBLIGOR_ENCLAVE_ADDR=127.0.0.1:5099 cargo run` in `enclave/obligor-enclave` and point `ENCLAVE_ENDPOINT` at it; Node then consumes the enclave's computed output. The Arcium MXE path still needs the `@arcium-hq/client` lifecycle. Leave the flag `false` only where labeled simulation is the intent (demos, CI); the run's trust model is always whatever actually executed.
 
 Enabling demo gates in production boots with a config warning every request path abides
 by them — the 402/x402 challenge is built from `X402_*` env terms and returns an honest
@@ -487,10 +487,13 @@ idempotency store for a shared one (Redis/Postgres), then run multiple instances
 
 ### Known production limits (honest ceilings, not overclaims)
 
-- **MPC / TEE binaries are not wired into the hosted runtime.** `ArciumBackend` and
-  `EnclaveBackend` execute the exact same formula in sealed-execution simulation;
-  the Arcis enclave + Nitro program live in `programs/` and `enclave/` in the repo.
-  Trust-model labels stay honest on every screen.
+- **TEE execution is wired; hardware attestation is not.** `EnclaveBackend` now talks to
+  the real Rust enclave over HTTP (`ENCLAVE_ENDPOINT`) and consumes its computed output,
+  but the hosted runtime does not run inside a Nitro/Oyster VM, so no hardware quote is
+  issued and `hardware_attested_tee` is never claimed — the run labels itself
+  `simulated_plaintext_compute` with a note. `ArciumBackend` still executes the identical
+  formula in sealed-execution simulation until the `@arcium-hq/client` MXE lifecycle is
+  wired. Trust-model labels stay honest on every screen.
 - **Per-protocol on-chain position decoding** (Kamino/Drift obligation parsing) is
   adapter-ready but not included; books enter via desk input, the deal-room flow, or
   the API, and get priced by live oracle marks.
