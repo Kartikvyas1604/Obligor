@@ -156,6 +156,13 @@ const envSchema = z.object({
     // Require a verified hardware attestation quote before claiming TEE. When
     // off, an un-attested enclave run is still labelled simulated_plaintext.
     enclaveQuoteRequired: boolish(false),
+    // Host-side attestation verification inputs. The enclave is untrusted: a
+    // `verified:true` boolean it returns is NOT sufficient to claim TEE. The
+    // host only claims hardware_attested_tee when it can independently match the
+    // returned measurement (and, if set, PCR0) against these allowlists. Left
+    // empty, TEE is never claimed (conservative).
+    expectedMeasurement: z.string().optional().default(""),
+    expectedPcr0: z.string().optional().default(""),
   }),
 
   escrow: z.object({
@@ -241,6 +248,8 @@ function load(): Env {
       arciumMxeEndpoint: process.env.ARCIUM_MXE_ENDPOINT,
       enclaveEndpoint: process.env.ENCLAVE_ENDPOINT,
       enclaveQuoteRequired: process.env.ENCLAVE_QUOTE_REQUIRED,
+      expectedMeasurement: process.env.ENCLAVE_EXPECTED_MEASUREMENT,
+      expectedPcr0: process.env.ENCLAVE_EXPECTED_PCR0,
     },
     escrow: {
       realSettle: process.env.ESCROW_REAL_SETTLE,

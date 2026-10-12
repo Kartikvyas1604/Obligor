@@ -252,11 +252,21 @@ export class EnclaveBackend implements ConfidentialBackend {
         partyCount: 2,
       };
 
-      // Only claim hardware-attested TEE when the enclave returned a genuine,
-      // verified hardware quote. An un-attested run (e.g. the enclave binary on
-      // a normal host) reports the conservative label + an honest note.
+      // Claim hardware-attested TEE ONLY when the HOST can independently verify
+      // the enclave's attestation. The enclave is untrusted: its own
+      // `verified:true` boolean is not enough. The host requires a returned
+      // quote and a measurement (and optional PCR0) matching the configured
+      // allowlist. Without a configured allowlist, TEE is never claimed.
       const raw = data.attestation;
-      if (raw?.verified && raw.quote_hex) {
+      const expectedMeasurement = env.confidential.expectedMeasurement;
+      const expectedPcr0 = env.confidential.expectedPcr0;
+      const hostVerified =
+        Boolean(raw?.verified && raw.quote_hex) &&
+        expectedMeasurement !== "" &&
+        raw?.measurement === expectedMeasurement &&
+        (expectedPcr0 === "" || raw?.pcr0 === expectedPcr0);
+
+      if (hostVerified && raw) {
         return {
           ...remote,
           backend: "enclave",
@@ -276,19 +286,23 @@ export class EnclaveBackend implements ConfidentialBackend {
 
       if (env.confidential.enclaveQuoteRequired) {
         throw new Error(
-          "Enclave returned no verified hardware attestation and ENCLAVE_QUOTE_REQUIRED is set — failing closed, not claiming TEE",
+          "Enclave returned no host-verifiable hardware attestation and ENCLAVE_QUOTE_REQUIRED is set — failing closed, not claiming TEE",
         );
       }
 
-      log.warn("enclave transport executed without a hardware attestation quote", { computationId });
+      log.warn("enclave transport executed without a host-verifiable hardware attestation", {
+        computationId,
+        enclaveClaimedVerified: Boolean(raw?.verified),
+      });
       return {
         ...remote,
         backend: "enclave",
         trustModel: "simulated_plaintext_compute",
         computationId,
         timestamp,
-        simulationNote:
-          "Executed over the real enclave transport (ENCLAVE_ENDPOINT), but no hardware attestation quote was returned — TEE is not claimed. trustModel conservatively reports simulated_plaintext_compute.",
+        simulationNote: raw?.verified
+          ? "Real enclave transport reported an attestation, but the host could not verify it (no matching ENCLAVE_EXPECTED_MEASUREMENT/PCR0 allowlist) — TEE is not claimed. trustModel conservatively reports simulated_plaintext_compute."
+          : "Executed over the real enclave transport (ENCLAVE_ENDPOINT), but no hardware attestation quote was returned — TEE is not claimed. trustModel conservatively reports simulated_plaintext_compute.",
       };
     }
 

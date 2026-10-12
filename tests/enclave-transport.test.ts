@@ -7,10 +7,14 @@ import type { AddressInfo } from "node:net";
 // import below. node:test runs each file in its own process, so this cannot
 // leak into other tests.
 process.env.CONFIDENTIAL_REAL_TRANSPORTS = "true";
+// Host-side allowlist: TEE is only claimed when the host can match the
+// enclave's returned measurement against this value.
+process.env.ENCLAVE_EXPECTED_MEASUREMENT = "m";
 
-let mode: "unattested" | "attested" = "unattested";
+let mode: "unattested" | "attested" | "spoofed" = "unattested";
 
 function enclavePayload() {
+  const measurement = mode === "spoofed" ? "attacker-measurement" : "m";
   return {
     session_id: "smoke",
     siloed_a_usd: 9940,
@@ -22,9 +26,9 @@ function enclavePayload() {
     net_exposure_usd: 0,
     buckets: [{ bucket: "SOL", exposure_usd: 0, haircut: 0.15, im_usd: 0 }],
     attestation:
-      mode === "attested"
-        ? { provider: "nitro", verified: true, quote_hex: "deadbeef", pcr0: "pcr0", measurement: "m" }
-        : { provider: "none", verified: false, quote_hex: "", pcr0: "", measurement: "m" },
+      mode === "unattested"
+        ? { provider: "none", verified: false, quote_hex: "", pcr0: "", measurement }
+        : { provider: "nitro", verified: true, quote_hex: "deadbeef", pcr0: "pcr0", measurement },
   };
 }
 
@@ -105,7 +109,16 @@ test("enclave real transport: consumes remote numbers and maps attestation hones
   assert.equal(sim.attestation, undefined);
   assert.match(sim.simulationNote ?? "", /no hardware attestation quote/i);
 
-  // 2) enclave responds WITH a verified quote → hardware_attested_tee + attestation.
+  // 2) enclave CLAIMS verified but its measurement does not match the host
+  //    allowlist → the untrusted boolean is ignored, TEE is NOT claimed.
+  mode = "spoofed";
+  const spoofed = await backend.netTwoParty(bookA, bookB);
+  assert.equal(spoofed.trustModel, "simulated_plaintext_compute");
+  assert.equal(spoofed.attestation, undefined);
+  assert.match(spoofed.simulationNote ?? "", /could not verify/i);
+
+  // 3) enclave responds WITH a verified quote whose measurement matches the
+  //    host allowlist → hardware_attested_tee + attestation.
   mode = "attested";
   const att = await backend.netTwoParty(bookA, bookB);
   assert.equal(att.trustModel, "hardware_attested_tee");
@@ -113,7 +126,7 @@ test("enclave real transport: consumes remote numbers and maps attestation hones
   assert.equal(att.attestation?.quote, "deadbeef");
   assert.equal(att.attestation?.provider, "nitro");
 
-  // 3) transport unreachable → fail closed (never silently simulate).
+  // 4) transport unreachable → fail closed (never silently simulate).
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await assert.rejects(() => backend.netTwoParty(bookA, bookB), /unreachable/i);
 });

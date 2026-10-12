@@ -361,3 +361,83 @@ fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     }
     haystack.windows(needle.len()).position(|w| w == needle)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn leg(party: &str, bucket: &str, notional: f64, exposure: f64, haircut: f64) -> PositionLeg {
+        PositionLeg {
+            party: party.to_string(),
+            venue: "manual".to_string(),
+            instrument: bucket.to_string(),
+            bucket: bucket.to_string(),
+            side: "long".to_string(),
+            qty: 0.0,
+            notional_usd: notional,
+            signed_exposure_usd: exposure,
+            haircut,
+            mark_usd: 1.0,
+        }
+    }
+
+    #[test]
+    fn integer_cents_rounding_matches_decimal_expectation() {
+        // 0.15 * 100.00 = 15.00 exactly.
+        let a = vec![leg("A", "BTC", 100.0, 100.0, 0.15)];
+        let b = vec![leg("B", "ETH", 100.0, -100.0, 0.15)];
+        let r = compute_two_party_netted("s", &a, &b);
+        assert_eq!(r.siloed_a_usd, 15.0);
+        assert_eq!(r.siloed_b_usd, 15.0);
+        assert_eq!(r.siloed_combined_usd, 30.0);
+        assert_eq!(r.netted_combined_usd, 30.0);
+        assert_eq!(r.savings_usd, 0.0);
+    }
+
+    #[test]
+    fn offsets_net_within_bucket() {
+        let a = vec![leg("A", "BTC", 100.0, 100.0, 0.1)];
+        let b = vec![leg("B", "BTC", 100.0, -100.0, 0.1)];
+        let r = compute_two_party_netted("s", &a, &b);
+        // Bucket nets to zero exposure → no initial margin on the netted side.
+        assert_eq!(r.netted_combined_usd, 0.0);
+        // Siloed each side still holds 10.00 → savings is the full 20.00.
+        assert_eq!(r.siloed_combined_usd, 20.0);
+        assert_eq!(r.savings_usd, 20.0);
+        assert_eq!(r.net_exposure_usd, 0.0);
+        assert_eq!(r.gross_notional_usd, 200.0);
+    }
+
+    #[test]
+    fn bucket_order_is_deterministic_on_ties() {
+        // Equal IM in both buckets → stable sort keeps input (insertion) order.
+        let a = vec![
+            leg("A", "BTC", 100.0, 100.0, 0.15),
+            leg("A", "ETH", 100.0, 100.0, 0.15),
+        ];
+        let r1 = compute_two_party_netted("s", &a, &[]);
+        let r2 = compute_two_party_netted("s", &a, &[]);
+        let names1: Vec<_> = r1.buckets.iter().map(|b| b.bucket.clone()).collect();
+        let names2: Vec<_> = r2.buckets.iter().map(|b| b.bucket.clone()).collect();
+        assert_eq!(names1, vec!["BTC".to_string(), "ETH".to_string()]);
+        assert_eq!(names1, names2);
+    }
+
+    #[test]
+    fn sorts_buckets_by_im_desc() {
+        let a = vec![
+            leg("A", "SMALL", 100.0, -100.0, 0.1),
+            leg("A", "BIG", 100.0, 100.0, 0.5),
+        ];
+        let r = compute_two_party_netted("s", &a, &[]);
+        assert_eq!(r.buckets[0].bucket, "BIG");
+        assert_eq!(r.buckets[1].bucket, "SMALL");
+    }
+
+    #[test]
+    fn unattested_by_default() {
+        let r = compute_two_party_netted("s", &[], &[]);
+        assert!(!r.attestation.verified);
+        assert_eq!(r.attestation.provider, "none");
+    }
+}
