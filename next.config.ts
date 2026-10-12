@@ -38,6 +38,14 @@ const nextConfig: NextConfig = {
   // Solana client libs are Node-only and use optional/require internals; keep
   // them out of the bundler so the escrow settle path loads them natively.
   serverExternalPackages: ["@solana/web3.js", "@solana/spl-token"],
+  async rewrites() {
+    // Public API surface: /health for liveness probes and /v1/* mirroring the
+    // canonical /api/v1/* handlers. Both resolve to the same route code.
+    return [
+      { source: "/health", destination: "/api/v1/health" },
+      { source: "/v1/:path*", destination: "/api/v1/:path*" },
+    ];
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

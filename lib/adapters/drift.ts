@@ -108,27 +108,32 @@ const payloadSchema = z.union([
 ]);
 
 const globalForDriftCache = globalThis as unknown as {
-  __obligorDriftSubAccount?: { snapshot: DriftSubAccount; fetchedAt: number };
+  __obligorDriftSubAccount?: Map<string, { snapshot: DriftSubAccount; fetchedAt: number }>;
 };
+const driftCache: Map<string, { snapshot: DriftSubAccount; fetchedAt: number }> = (globalForDriftCache.__obligorDriftSubAccount ??=
+  new Map());
 
 /**
  * Read a Drift mainnet user's perp positions through the Drift Data API.
- * Throws loudly when unconfigured, unreachable, or unparseable — a desk's
- * exposure is never "verified" against nothing.
+ * Defaults to the configured DRIFT_AUTHORITY, but accepts a specific mainnet
+ * wallet so callers can read any desk's live exposure. Throws loudly when
+ * unconfigured, unreachable, or unparseable — a desk's exposure is never
+ * "verified" against nothing.
  */
-export async function fetchDriftSubAccount(): Promise<DriftSubAccount> {
-  if (!env.drift.authority) {
+export async function fetchDriftSubAccount(authorityOverride?: string): Promise<DriftSubAccount> {
+  const authority = authorityOverride ?? env.drift.authority;
+  if (!authority) {
     throw new Error(
-      "DRIFT_SUBACCOUNT_NOT_CONFIGURED: set DRIFT_AUTHORITY (mainnet wallet base58) to verify desk exposure against a live Drift subaccount",
+      "DRIFT_SUBACCOUNT_NOT_CONFIGURED: set DRIFT_AUTHORITY (mainnet wallet base58) or pass a wallet to read a live Drift subaccount",
     );
   }
 
-  const cached = globalForDriftCache.__obligorDriftSubAccount;
+  const { subAccountId, dataApiBase } = env.drift;
+  const cacheKey = `${authority}:${subAccountId}`;
+  const cached = driftCache.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < env.drift.subAccountCacheMs) {
     return cached.snapshot;
   }
-
-  const { authority, subAccountId, dataApiBase } = env.drift;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 3_000);
   try {
@@ -180,10 +185,10 @@ export async function fetchDriftSubAccount(): Promise<DriftSubAccount> {
       fetchedAt: new Date().toISOString(),
       perpExposures,
     };
-    globalForDriftCache.__obligorDriftSubAccount = {
+    driftCache.set(cacheKey, {
       snapshot,
       fetchedAt: Date.now(),
-    };
+    });
     log.info("drift subaccount read", { authority: authority.slice(0, 8), exposures: perpExposures.length });
     return snapshot;
   } catch (err) {

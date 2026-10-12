@@ -4,6 +4,7 @@ import { ApiError, parseBody, rateLimitFor, readJsonBody, withApi } from "@/lib/
 import { env } from "@/lib/env";
 import { getConfidentialBackend } from "@/lib/confidential";
 import { priceAndNormalizeLegs } from "@/lib/positions";
+import { isPaid, paymentRequired } from "@/lib/x402";
 import { makeLogger } from "@/lib/logger";
 
 const log = makeLogger("parallel");
@@ -18,6 +19,7 @@ const pairSchema = z.object({
 const bodySchema = z.object({
   chain: z.enum(["monad"]).default("monad"),
   pairs: z.array(pairSchema).min(1).max(env.positions.maxLegsPerBook),
+  demoPayment: z.boolean().optional(),
 });
 
 const MIN_PARALLEL_PAIRS = 3;
@@ -29,9 +31,48 @@ const MIN_PARALLEL_PAIRS = 3;
  * fabricated here.
  */
 export const POST = withApi(async ({ req }) => {
-  rateLimitFor("compute", req);
+  const headers = rateLimitFor("compute", req);
   const body = parseBody(bodySchema, await readJsonBody(req));
   const chain = body.chain as "monad";
+
+  // x402 gate — same fail-closed policy as the two-party and N-party routes.
+  const paymentSig =
+    req.headers.get("x-payment-signature") || req.headers.get("payment-signature");
+  const paid = isPaid(paymentSig, Boolean(body.demoPayment), chain);
+
+  if (!paid) {
+    const challenge = paymentRequired(chain);
+    log.info("402 issued", { chain, route: "net-margin-parallel" });
+
+    if (!challenge.configured) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "PAYMENTS_NOT_CONFIGURED",
+          message:
+            "Parallel clearing is pay-per-call (x402) and no destination wallet is configured for this chain.",
+          requestId: (req.headers.get("x-request-id") as string | undefined) ?? undefined,
+        },
+        { status: 503 },
+      );
+    }
+
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "PAYMENT-REQUIRED",
+        message: "Parallel multi-pair clearing requires an x402 micropayment.",
+        x402: challenge.challenge,
+      },
+      {
+        status: 402,
+        headers: {
+          ...headers,
+          "WWW-Authenticate": `x402 scheme="exact", network="${challenge.challenge.network}", asset="${challenge.challenge.asset}", price="${challenge.challenge.priceUsd}", payTo="${challenge.challenge.payTo}"`,
+        },
+      },
+    );
+  }
 
   if (body.pairs.length < MIN_PARALLEL_PAIRS) {
     throw ApiError.badRequest(

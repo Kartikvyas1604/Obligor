@@ -20,11 +20,19 @@ export const rawLegSchema = z.object({
   haircut: z.number().min(0).max(1).optional(),
 });
 
+const SOLANA_ADDRESS = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+const EVM_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+
+/**
+ * A wallet address on either supported chain: a Solana base58 pubkey, or an
+ * EVM/Monad `0x`-prefixed 20-byte hex address. Rejects everything else.
+ */
 export const walletSchema = z
   .string()
   .trim()
-  .min(32)
-  .max(64)
-  .regex(/^[1-9A-HJ-NP-Za-km-z]+$/, "Must be a base58 / EVM-style address (no spaces, no 0/O/I/l for Solana)");
+  .refine(
+    (v) => SOLANA_ADDRESS.test(v) || EVM_ADDRESS.test(v),
+    "Must be a Solana base58 public key or an EVM 0x-prefixed address",
+  );
 
 export { chainSchema };

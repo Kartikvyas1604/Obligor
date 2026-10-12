@@ -85,7 +85,16 @@ export function twoPartySiloed(bookA: PositionBook, bookB: PositionBook) {
  * result is identical to calling this with exactly two books.
  */
 export function nPartyNetted(books: PositionBook[]): NetMarginResult {
-  const keys = books.map((book, i) => book.party ?? `P${i + 1}`);
+  // Keys must be unique: the request allows up to 4 books but party labels are
+  // only A|B|C, so a duplicate label would otherwise overwrite another desk's
+  // siloed margin. Disambiguate repeats with a numeric suffix.
+  const seen = new Map<string, number>();
+  const keys = books.map((book, i) => {
+    const base = book.party || `P${i + 1}`;
+    const n = seen.get(base) ?? 0;
+    seen.set(base, n + 1);
+    return n === 0 ? base : `${base}${n + 1}`;
+  });
   const perPartySiloedUsd: Record<string, number> = {};
   for (let i = 0; i < books.length; i++) {
     perPartySiloedUsd[keys[i]] = siloedIm(books[i].legs);
@@ -121,8 +130,8 @@ export function nPartyNetted(books: PositionBook[]): NetMarginResult {
   const savings = Math.max(0, siloedCombined - nettedCombined);
 
   return {
-    siloedAUsd: ROUND(perPartySiloedUsd["A"] ?? 0),
-    siloedBUsd: ROUND(perPartySiloedUsd["B"] ?? perPartySiloedUsd[keys[1]] ?? 0),
+    siloedAUsd: ROUND(perPartySiloedUsd[keys[0]] ?? 0),
+    siloedBUsd: ROUND(perPartySiloedUsd[keys[1]] ?? 0),
     siloedCombinedUsd: ROUND(siloedCombined),
     nettedCombinedUsd: ROUND(nettedCombined),
     savingsUsd: ROUND(savings),
