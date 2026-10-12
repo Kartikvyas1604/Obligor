@@ -10,7 +10,11 @@
     {
       "name": "initialize_escrow",
       "docs": [
-        "Initializes a bilateral margin escrow between Party A and Party B"
+        "Initializes a bilateral margin escrow between Party A and Party B.",
+        "",
+        "Collateral is moved into a vault **owned by the escrow PDA**, so only",
+        "this program can ever sign funds out of it. The escrow account address",
+        "is deterministic: `[b\"escrow\", party_a, party_b]`."
       ],
       "discriminator": [
         243,
@@ -26,7 +30,29 @@
         {
           "name": "escrow_account",
           "writable": true,
-          "signer": true
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "party_a"
+              },
+              {
+                "kind": "account",
+                "path": "party_b"
+              }
+            ]
+          }
         },
         {
           "name": "party_a",
@@ -39,6 +65,9 @@
           "signer": true
         },
         {
+          "name": "mint"
+        },
+        {
           "name": "party_a_token",
           "writable": true
         },
@@ -48,11 +77,101 @@
         },
         {
           "name": "vault",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "escrow_account"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
         },
         {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
           "name": "system_program",
@@ -60,6 +179,10 @@
         }
       ],
       "args": [
+        {
+          "name": "clearing_authority",
+          "type": "pubkey"
+        },
         {
           "name": "party_a_amount",
           "type": "u64"
@@ -73,7 +196,14 @@
     {
       "name": "settle_and_release_excess",
       "docs": [
-        "Settles net margin based on verified Obligor confidential computation result"
+        "Settles net margin from a verified Obligor confidential computation and",
+        "releases the *excess* collateral back to both desks proportionally.",
+        "",
+        "Security invariants enforced by the account constraints:",
+        "- only the escrow's `clearing_authority` may call this (`has_one`),",
+        "- the escrow PDA address is re-derived from its stored parties,",
+        "- the vault and both party token accounts are bound to the escrow's",
+        "signer PDA and mint, so funds cannot be redirected."
       ],
       "discriminator": [
         87,
@@ -88,11 +218,147 @@
       "accounts": [
         {
           "name": "escrow_account",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "escrow_account.party_a",
+                "account": "EscrowAccount"
+              },
+              {
+                "kind": "account",
+                "path": "escrow_account.party_b",
+                "account": "EscrowAccount"
+              }
+            ]
+          }
         },
         {
           "name": "clearing_authority",
-          "signer": true
+          "signer": true,
+          "relations": [
+            "escrow_account"
+          ]
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "escrow_account"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "escrow_account"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "party_a_token",
+          "writable": true
+        },
+        {
+          "name": "party_b_token",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": [
@@ -164,7 +430,22 @@
     {
       "code": 6001,
       "name": "InvalidNettedMargin",
-      "msg": "Netted margin must be lower than total locked siloed margin."
+      "msg": "Netted margin must not exceed total locked siloed margin."
+    },
+    {
+      "code": 6002,
+      "name": "ZeroCollateral",
+      "msg": "Escrow requires at least one non-zero collateral deposit."
+    },
+    {
+      "code": 6003,
+      "name": "MathOverflow",
+      "msg": "Arithmetic overflow while computing the release split."
+    },
+    {
+      "code": 6004,
+      "name": "InvalidClearingAuthority",
+      "msg": "Clearing authority must be a non-default pubkey."
     }
   ],
   "types": [
@@ -180,6 +461,22 @@
           {
             "name": "party_b",
             "type": "pubkey"
+          },
+          {
+            "name": "clearing_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "escrow_bump",
+            "type": "u8"
           },
           {
             "name": "party_a_siloed_im",
@@ -236,6 +533,10 @@
           },
           {
             "name": "party_b",
+            "type": "pubkey"
+          },
+          {
+            "name": "clearing_authority",
             "type": "pubkey"
           },
           {

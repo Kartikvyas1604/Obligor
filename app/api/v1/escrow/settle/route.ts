@@ -92,6 +92,7 @@ export const POST = withApi(async ({ req }) => {
         escrowAccount: body.escrowAccount,
         nettedMarginUsd: body.nettedMarginUsd,
         proofHash: body.proofHash,
+        expectedTotalLockedUsd: body.totalLockedUsd,
       });
     } catch (err) {
       throw new ApiError(
@@ -102,17 +103,21 @@ export const POST = withApi(async ({ req }) => {
     }
   }
 
+  // When the on-chain transfer ran, report ITS numbers (the program is the source
+  // of truth); otherwise report the locally computed release for the envelope.
   const result = {
     ok: true,
     escrowId: body.escrowId,
     chain: body.chain,
     status: onchain ? "settled_onchain" : "settlement_computed",
     proofHash: body.proofHash,
-    totalLockedUsd: body.totalLockedUsd,
-    nettedMarginUsd: body.nettedMarginUsd,
-    freedCapitalUsd: freedCapital,
-    releasedToPartyAUsd: releasedToA,
-    releasedToPartyBUsd: releasedToB,
+    totalLockedUsd: onchain?.totalLockedUsd ?? body.totalLockedUsd,
+    nettedMarginUsd: onchain?.nettedMarginUsd ?? body.nettedMarginUsd,
+    freedCapitalUsd: onchain
+      ? Math.round((onchain.totalLockedUsd - onchain.nettedMarginUsd) * 100) / 100
+      : freedCapital,
+    releasedToPartyAUsd: onchain?.releasedToAUsd ?? releasedToA,
+    releasedToPartyBUsd: onchain?.releasedToBUsd ?? releasedToB,
     /** Real transaction signature when on-chain settlement ran; null otherwise. */
     transactionSignature: onchain?.signature ?? null,
     transactionSlot: onchain?.slot ?? null,

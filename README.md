@@ -170,7 +170,7 @@ Obligor explicitly labels what is real code, what is fixture, and what is out of
 | :--- | :--- | :--- |
 | **Two-Party Netting Formula** | **Real** | Pure TypeScript source of truth (`lib/margin.ts`) with golden tests; mirrored in the Arcis circuit and the Rust enclave |
 | **Position ingestion** | **Real (oracle-priced)** | Books enter via desk input, deal rooms, or the API; every mark re-priced against live Pyth Hermes with deviation/stale/fallback provenance labels. Fabricated per-party quantities were removed — positions are never invented. |
-| **Confidential execution (MPC / TEE)** | **Real wire (enclave) — un-attested** | The Rust enclave (`enclave/obligor-enclave/`) is a real, dep-free HTTP service (GET `/health`, POST `/net`); with `CONFIDENTIAL_REAL_TRANSPORTS=true` + `ENCLAVE_ENDPOINT`, Node **sends both books to it and consumes the enclave's output** (it does not recompute locally). Because no hardware attestation quote is issued outside a real Nitro/Oyster VM, trustModel stays `simulated_plaintext_compute` with an honest note. The Arcis circuit (`programs/obligor-mxe/`) remains CI-compiled sealed-execution simulation until the `@arcium-hq/client` MXE lifecycle is wired. An unconnected transport **fails closed**, never silently simulates. |
+| **Confidential execution (MPC / TEE)** | **Real wire (enclave) — un-attested** | The Rust enclave (`enclave/obligor-enclave/`) is a real, dep-free HTTP service (GET `/health`, POST `/net`); with `CONFIDENTIAL_REAL_TRANSPORTS=true` + `ENCLAVE_ENDPOINT`, Node **sends both books to it and consumes the enclave's output** (it does not recompute locally). Because no hardware attestation quote is issued outside a real Nitro/Oyster VM, trustModel stays `simulated_plaintext_compute` with an honest note. The Arcis circuit (`mxe/`) remains CI-compiled sealed-execution simulation until the `@arcium-hq/client` MXE lifecycle is wired. An unconnected transport **fails closed**, never silently simulates. |
 | **Hardware attestation** | **Not claimed** | `hardware_attested_tee` is returned **only** when the enclave returns a verified hardware quote (`attestation.verified === true` with a non-empty `quote_hex`). The current enclave returns `provider:"none", verified:false` plus a SHA256 proof-of-execution digest, so no TEE is claimed. A genuine Nitro/Oyster NSM attestation document is the only thing that ever flips `verified`. |
 | **Mock Equity `tAAPL`** | **Mock** | Priced from the live Pyth AAPL mark; adapter-ready for xStocks/Backed rails; never custody |
 | **Parallel Multi-Pair Clearing** | **Real** | `/api/v1/net-margin/parallel` nets ≥3 desk pairs concurrently per epoch (server-enforced minimum); trust model labeled from execution |
@@ -247,7 +247,7 @@ Computes two-party confidential net margin. Unpaid calls receive `402 PAYMENT-RE
     "savingsUsd": 22000,
     "backend": "arcium",
     "trustModel": "simulated_plaintext_compute",
-    "simulationNote": "MPC circuit is compiled in programs/obligor-mxe — this run executed the exact formula as sealed-execution simulation (no real encryption). Trust model not claimed.",
+    "simulationNote": "MPC circuit is compiled in mxe — this run executed the exact formula as sealed-execution simulation (no real encryption). Trust model not claimed.",
     "computationId": "arc_mxe_m2k19_8fa21"
   },
   "commitmentHash": "sha256:…",

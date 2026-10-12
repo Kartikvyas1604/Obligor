@@ -6,7 +6,7 @@ const LABELS: Record<BackendKind, { text: string; cls: string; note: string }> =
     text: "MPC circuit (simulated seal)",
     cls: "border-primary/40 text-primary",
     note:
-      "The Arcis MPC circuit ships in programs/obligor-mxe. Until the MXE transport is wired, this runs the exact formula in plaintext and does not claim MPC. Real MPC lands when Arcium MXE is connected.",
+      "The Arcis MPC circuit ships in mxe. Until the MXE transport is wired, this runs the exact formula in plaintext and does not claim MPC. Real MPC lands when Arcium MXE is connected.",
   },
   enclave: {
     text: "TEE path (simulated seal)",

@@ -1,5 +1,9 @@
 [workspace]
 members = ["programs/obligor-escrow"]
+# mxe/ is an Arcium/Arcis MXE circuit, not a native Anchor program. It lives
+# outside programs/ so `anchor build` only sees real Anchor programs, and it is
+# excluded from this workspace so cargo metadata treats it as self-contained.
+exclude = ["mxe"]
 resolver = "2"
 
 [profile.release]

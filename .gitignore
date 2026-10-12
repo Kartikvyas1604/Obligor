@@ -61,3 +61,5 @@ yarn-error.log*
 # ---- solana localnet ----
 test-ledger/
 .ledger/
+
+docs/

@@ -1,8 +1,7 @@
 # NOTE: obligor-mxe is an Arcium/Arcis MXE circuit, not a native Anchor
-# program — it is intentionally NOT a member of the root workspace (see
-# /Cargo.toml). This manifest exists only so the Anchor workspace scanner can
-# enumerate the directory; the crate is never built by `anchor build` because
-# it is not listed under [programs.*] in Anchor.toml.
+# program. It lives outside programs/ (see /Cargo.toml exclude) so `anchor build`
+# never picks it up, and it is intentionally NOT a member of the root workspace.
+# The real confidential artifact is encrypted-ixs/two_party_portfolio_net.rs.
 [package]
 name = "obligor-mxe"
 version = "0.1.0"

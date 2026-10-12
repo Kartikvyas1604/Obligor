@@ -145,7 +145,7 @@ function checkTransport(kind: "arcium" | "enclave") {
  * ArciumBackend (Solana).
  *
  * The Arcis circuit `two_party_portfolio_net` in
- * `programs/obligor-mxe/encrypted-ixs/` is the real MPC program. Until the
+ * `mxe/encrypted-ixs/` is the real MPC program. Until the
  * compiled MXE transport is wired (`ARCIUM_MXE_ENDPOINT` + real
  * `@arcium-hq/client` encryption lifecycle), this executes the identical
  * formula as sealed-execution simulation and labels it honestly.
@@ -203,7 +203,7 @@ export class ArciumBackend implements ConfidentialBackend {
       computationId,
       timestamp,
       simulationNote:
-        "MPC circuit is compiled in programs/obligor-mxe — this run executed the exact formula as sealed-execution simulation (no real encryption). Trust model not claimed.",
+        "MPC circuit is compiled in mxe — this run executed the exact formula as sealed-execution simulation (no real encryption). Trust model not claimed.",
     };
   }
 }

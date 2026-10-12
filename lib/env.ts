@@ -156,6 +156,10 @@ const envSchema = z.object({
     // Path to a Solana CLI JSON keypair file for the clearing authority.
     authorityKeypair: z.string().optional().default(""),
     commitment: z.enum(["processed", "confirmed", "finalized"]).optional().default("confirmed"),
+    // Collateral token base units per 1 USD (e.g. 6 for USDC). The API converts
+    // netted margin USD → base units with this before settling on-chain. Must
+    // match the decimals of the mint used in initialize_escrow.
+    baseDecimals: positiveInt(6),
   }),
 });
 
@@ -222,6 +226,7 @@ function load(): Env {
       programId: process.env.ESCROW_PROGRAM_ID,
       authorityKeypair: process.env.SOLANA_AUTHORITY_KEYPAIR,
       commitment: process.env.SOLANA_COMMITMENT,
+      baseDecimals: process.env.ESCROW_BASE_DECIMALS,
     },
   });
 
