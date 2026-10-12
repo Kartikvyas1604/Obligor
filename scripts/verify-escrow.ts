@@ -1,0 +1,203 @@
+/**
+ * Opt-in end-to-end escrow integration test (localnet / devnet).
+ *
+ *   set -a; . ./.escrow-local.env; set +a   # from scripts/escrow-local.sh
+ *   npm run verify:escrow
+ *
+ * Drives the REAL obligor-escrow program: initializes a bilateral vault with
+ * SPL collateral, settles net margin via the exact instruction the API emits,
+ * then decodes on-chain state to prove the release happened. If the RPC is
+ * unreachable the test SKIPS (exit 0) so it is safe in default CI.
+ *
+ * It never runs against mainnet — a non-local RPC must opt in explicitly.
+ */
+
+import { readFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import {
+  Connection,
+  Keypair,
+  LAMPORTS_PER_SOL,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  TransactionInstruction,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import {
+  TOKEN_PROGRAM_ID,
+  createMint,
+  getAccount,
+  getOrCreateAssociatedTokenAccount,
+  mintTo,
+} from "@solana/spl-token";
+import idl from "../lib/idl/obligor_escrow.json";
+
+const RPC = process.env.SOLANA_RPC_URL ?? "http://127.0.0.1:8899";
+const PROGRAM_ID = new PublicKey(
+  process.env.ESCROW_PROGRAM_ID ?? "94YmMnGjq2U8zpsLMSuk9fMwnfcHqrft3CtmwuZidMkZ",
+);
+const AUTH_PATH = process.env.SOLANA_AUTHORITY_KEYPAIR ?? "";
+
+const ESCROW_STATUS = { Initialized: 0, Deposited: 1, Settled: 2, Liquidated: 3 } as const;
+
+function disc(name: string): Buffer {
+  const ix = idl.instructions.find((i) => i.name === name);
+  if (!ix) throw new Error(`IDL missing instruction ${name}`);
+  return Buffer.from(ix.discriminator);
+}
+function u64(n: number | bigint): Buffer {
+  const b = Buffer.alloc(8);
+  b.writeBigUInt64LE(BigInt(n));
+  return b;
+}
+function load(path: string, label: string): Keypair {
+  if (!path) throw new Error(`${label} path not set`);
+  return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(path, "utf8")) as number[]));
+}
+function ok(cond: boolean, msg: string): void {
+  if (!cond) throw new Error(`ASSERT FAILED: ${msg}`);
+  console.log(`  ✓ ${msg}`);
+}
+
+async function main(): Promise<void> {
+  const connection = new Connection(RPC, "confirmed");
+
+  try {
+    await connection.getVersion();
+  } catch {
+    console.log(`SKIP verify:escrow — no reachable RPC at ${RPC}`);
+    process.exit(0);
+  }
+
+  const isLocal = /127\.0\.0\.1|localhost/.test(RPC);
+  if (!isLocal && process.env.ESCROW_ALLOW_REMOTE !== "true") {
+    console.log(`SKIP verify:escrow — refusing non-local RPC ${RPC} (set ESCROW_ALLOW_REMOTE=true to override)`);
+    process.exit(0);
+  }
+
+  console.log(`▸ RPC          ${RPC}`);
+  console.log(`▸ program      ${PROGRAM_ID.toBase58()}`);
+
+  const authority = load(AUTH_PATH, "SOLANA_AUTHORITY_KEYPAIR");
+  const payer = authority;
+
+  const deployed = await connection.getAccountInfo(PROGRAM_ID);
+  ok(deployed !== null && deployed.executable, `program is deployed & executable`);
+
+  // --- fund two desks -------------------------------------------------------
+  const partyA = Keypair.generate();
+  const partyB = Keypair.generate();
+  for (const [label, kp] of [["party A", partyA], ["party B", partyB]] as const) {
+    const sig = await connection.requestAirdrop(kp.publicKey, LAMPORTS_PER_SOL);
+    await connection.confirmTransaction(sig, "confirmed");
+    console.log(`  ✓ funded ${label} ${kp.publicKey.toBase58()}`);
+  }
+
+  // --- SPL collateral -------------------------------------------------------
+  const mint = await createMint(connection, authority, authority.publicKey, null, 6);
+  const ataA = await getOrCreateAssociatedTokenAccount(connection, payer, mint, partyA.publicKey);
+  const ataB = await getOrCreateAssociatedTokenAccount(connection, payer, mint, partyB.publicKey);
+  const vault = await getOrCreateAssociatedTokenAccount(connection, payer, mint, authority.publicKey);
+  await mintTo(connection, payer, mint, ataA.address, authority, 1_000_000);
+  await mintTo(connection, payer, mint, ataB.address, authority, 1_000_000);
+  console.log(`  ✓ minted collateral (mint ${mint.toBase58()})`);
+
+  // USD cents: A locks 100000, B locks 50000.
+  const partyAAmount = 100_000;
+  const partyBAmount = 50_000;
+  const totalLocked = partyAAmount + partyBAmount;
+
+  // --- initialize_escrow ----------------------------------------------------
+  const escrowAccount = Keypair.generate();
+  const initData = Buffer.concat([disc("initialize_escrow"), u64(partyAAmount), u64(partyBAmount)]);
+  const initTx = new Transaction().add(
+    new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: escrowAccount.publicKey, isSigner: true, isWritable: true },
+        { pubkey: partyA.publicKey, isSigner: true, isWritable: true },
+        { pubkey: partyB.publicKey, isSigner: true, isWritable: true },
+        { pubkey: ataA.address, isSigner: false, isWritable: true },
+        { pubkey: ataB.address, isSigner: false, isWritable: true },
+        { pubkey: vault.address, isSigner: false, isWritable: true },
+        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      data: initData,
+    }),
+  );
+  const initSig = await sendAndConfirmTransaction(connection, initTx, [authority, partyA, partyB, escrowAccount]);
+  console.log(`  ✓ initialize_escrow  ${initSig}`);
+
+  const vaultAfterInit = await getAccount(connection, vault.address);
+  ok(vaultAfterInit.amount === BigInt(totalLocked), `vault holds ${totalLocked} locked collateral`);
+
+  // Seed-only mode: leave a fresh Deposited escrow behind for API testing.
+  if (process.env.ESCROW_SEED_ONLY === "true") {
+    console.log(`\n🔑 seeded escrow (status=Deposited): ${escrowAccount.publicKey.toBase58()}`);
+    console.log(`   POST /api/v1/escrow/settle with escrowAccount=${escrowAccount.publicKey.toBase58()}`);
+    return;
+  }
+
+  // --- settle_and_release_excess -------------------------------------------
+  const nettedMarginUsd = 60_000;
+  const proofHash = randomBytes(32);
+  const settleTx = new Transaction().add(
+    new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: escrowAccount.publicKey, isSigner: false, isWritable: true },
+        { pubkey: authority.publicKey, isSigner: true, isWritable: false },
+      ],
+      data: Buffer.concat([disc("settle_and_release_excess"), u64(nettedMarginUsd), proofHash]),
+    }),
+  );
+  const settleSig = await sendAndConfirmTransaction(connection, settleTx, [authority]);
+  console.log(`  ✓ settle_and_release_excess  ${settleSig}`);
+
+  const conf = await connection.getTransaction(settleSig, {
+    commitment: "confirmed",
+    maxSupportedTransactionVersion: 0,
+  });
+  ok(conf !== null && conf.meta !== null && conf.meta.err === null, "settle tx confirmed with no error");
+
+  // --- decode + assert on-chain state --------------------------------------
+  const info = await connection.getAccountInfo(escrowAccount.publicKey);
+  ok(info !== null, "escrow account exists");
+  const d = info!.data;
+  let o = 8; // skip anchor discriminator
+  const partyAOnchain = new PublicKey(d.subarray(o, o + 32));
+  o += 32;
+  const partyBOnchain = new PublicKey(d.subarray(o, o + 32));
+  o += 32;
+  const siloedA = d.readBigUInt64LE(o);
+  o += 8;
+  const siloedB = d.readBigUInt64LE(o);
+  o += 8;
+  const totalOnchain = d.readBigUInt64LE(o);
+  o += 8;
+  const freedOnchain = d.readBigUInt64LE(o);
+  o += 8;
+  o += 32; // proof_hash
+  const status = d.readUInt8(o);
+  o += 1;
+
+  const expectedFreed = BigInt(totalLocked - nettedMarginUsd);
+  ok(partyAOnchain.equals(partyA.publicKey), "party A pubkey round-trips");
+  ok(partyBOnchain.equals(partyB.publicKey), "party B pubkey round-trips");
+  ok(siloedA === BigInt(partyAAmount) && siloedB === BigInt(partyBAmount), "siloed margin recorded");
+  ok(totalOnchain === BigInt(totalLocked), "total locked recorded");
+  ok(status === ESCROW_STATUS.Settled, "status == Settled");
+  ok(freedOnchain === expectedFreed, `freed capital == ${expectedFreed}`);
+
+  const explorer = isLocal
+    ? `https://explorer.solana.com/tx/${settleSig}?cluster=custom&customUrl=${encodeURIComponent(RPC)}`
+    : `https://explorer.solana.com/tx/${settleSig}`;
+  console.log(`\n✅ verify:escrow PASSED\n   settle: ${settleSig}\n   ${explorer}`);
+}
+
+main().catch((err) => {
+  console.error(`\n✗ verify:escrow FAILED: ${err instanceof Error ? err.message : String(err)}`);
+  process.exit(1);
+});

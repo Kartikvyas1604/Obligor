@@ -49,9 +49,15 @@ mainnet-ready:
   `simulated_plaintext_compute` (never `hardware_attested_tee`). `ArciumBackend`
   runs the identical formula in sealed-execution simulation until the
   `@arcium-hq/client` MXE lifecycle is wired.
-- **Escrow settlement returns a computed envelope, not an on-chain
-  transaction.** No fabricated transaction hashes are ever returned. The real
-  lock/transfer executes in the escrow contract repo.
+- **Escrow settlement is real when explicitly enabled; the program moves state,
+  not tokens (yet).** Default (`ESCROW_REAL_SETTLE=false`) returns
+  `transactionSignature:null` — no fabricated hashes, ever. When
+  `ESCROW_REAL_SETTLE=true`, the API emits a real `settle_and_release_excess`
+  transaction against the deployed `obligor-escrow` program (assembled from the
+  committed IDL discriminator via `@solana/web3.js`), fails closed with `502` on
+  any error, and records nothing. The program currently records freed capital +
+  proof hash and emits an event; the proportional vault→desk token CPI payout is
+  the next program revision.
 - **Rate limiting and idempotency stores are in-memory, per instance.** Put a
   shared edge limiter / store in front before running more than one instance.
 

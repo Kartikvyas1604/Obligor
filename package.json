@@ -11,6 +11,8 @@
     "x402:sign": "npx -y tsx scripts/sign-x402-receipt.ts",
     "verify:security": "npx -y tsx scripts/security-contract-check.ts",
     "verify:load": "npx -y tsx scripts/load-sweep.ts",
+    "verify:escrow": "npx -y tsx scripts/verify-escrow.ts",
+    "escrow:local": "bash scripts/escrow-local.sh",
     "demo:agent-a": "npx -y tsx scripts/demo-agent-a.ts",
     "demo:agent-b": "npx -y tsx scripts/demo-agent-b.ts",
     "demo:agent-monad": "npx -y tsx scripts/demo-agent-monad.ts",

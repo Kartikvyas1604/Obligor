@@ -175,7 +175,7 @@ Obligor explicitly labels what is real code, what is fixture, and what is out of
 | **Mock Equity `tAAPL`** | **Mock** | Priced from the live Pyth AAPL mark; adapter-ready for xStocks/Backed rails; never custody |
 | **Parallel Multi-Pair Clearing** | **Real** | `/api/v1/net-margin/parallel` nets ≥3 desk pairs concurrently per epoch (server-enforced minimum); trust model labeled from execution |
 | **x402 V2 Machine Payments** | **Real verification — honest** | 402 challenge built from env terms is real; the Monad facilitator (`x402-facilitator.molandak.org/supported`) is live-verified by `npm run verify:x402`. Obligor signed receipts are **cryptographically verified** (ed25519 over `network/asset/payTo/amount` + one-time nonce) with `node:crypto` via `lib/x402.ts`; a forged/tampered envelope is rejected outright (`X402_REQUIRE_VERIFIED_SIGNATURES` forces fail-closed). The legacy format-check escape hatch is dev-only. The envelope is Obligor's own wire format — Coinbase x402 "exact" on-chain settlement (`@x402` SDK) is the tracked interop follow-up. `SOLANA_PAY_TO`/`MONAD_PAY_TO` gates enablement per chain. |
-| **Bilateral escrow** | **Partial** | Deposit + release envelopes are real validated APIs (`/v1/escrow/*`) wired to the UI; on-chain lock/transfer executes in the escrow contract repo — the API never fabricates a transaction hash or claims funds moved. |
+| **Bilateral escrow** | **Real on-chain settle (gated)** | The `programs/obligor-escrow` Anchor program (builds to a real BPF `.so`, program id `94YmMnGjq2U8zpsLMSuk9fMwnfcHqrft3CtmwuZidMkZ`) locks bilateral SPL collateral and settles it. With `ESCROW_REAL_SETTLE=true`, `POST /v1/escrow/settle` emits a **real** `settle_and_release_excess` transaction (`lib/escrow-onchain.ts`, assembled from the committed IDL discriminator via `@solana/web3.js`) and returns the verifiable signature; any failure returns `502` and records nothing. Default (`false`) returns `transactionSignature:null` — never a fabricated hash. `npm run escrow:local` brings up a localnet end-to-end (`npm run verify:escrow`). |
 | **Capital Movement / Liquidation** | **Not Built** | Margin analytics only; Obligor does not custody or withdraw venue funds |
 
 ---
@@ -296,10 +296,16 @@ Obligor/
 │   └── wallet-connect.tsx
 ├── lib/
 │   ├── confidential.ts          # Pluggable backend implementations (Arcium, Enclave, Simulated)
+│   ├── escrow-onchain.ts        # Real settle_and_release_excess emitter (gated, fail-closed)
+│   ├── idl/
+│   │   └── obligor_escrow.json  # Committed program IDL (settle discriminator source of truth)
 │   ├── fixtures.ts              # Golden judge & multi-pair fixtures
 │   ├── margin.ts                # Pure mathematical netting engine
 │   └── positions.ts             # Position leg constructors & mock equity
 ├── programs/
+│   ├── obligor-escrow/          # Bilateral margin escrow Anchor program (real BPF build)
+│   │   ├── obligor_escrow-keypair.json  # Committed program keypair (fixed program id)
+│   │   └── src/lib.rs           # initialize_escrow + settle_and_release_excess
 │   └── obligor-mxe/             # Arcium MXE confidential Arcis circuit & Anchor program
 │       ├── encrypted-ixs/       # Arcis two_party_portfolio_net confidential circuit
 │       └── src/lib.rs           # Anchor clearing session queue & callback handlers
@@ -311,6 +317,8 @@ Obligor/
 │   ├── demo-agent-a.ts          # Party A x402 client script
 │   ├── demo-agent-b.ts          # Party B x402 client script
 │   ├── demo-agent-monad.ts      # Monad parallel epoch client script
+│   ├── escrow-local.sh          # Localnet bring-up: validator + build + deploy + .escrow-local.env
+│   ├── verify-escrow.ts         # Opt-in end-to-end escrow test against a live validator
 │   └── verify-x402-networks.ts  # x402 facilitator probe
 ├── tests/
 │   ├── margin.test.ts           # Mathematical engine test suite
@@ -366,7 +374,12 @@ npm run verify:security
 # 7. Load sweep against the paid clearing path (latency percentiles + throughput)
 npm run verify:load
 
-# 8. Production build & ESLint validation
+# 8. On-chain escrow end-to-end: localnet validator + program deploy + real settle
+npm run escrow:local          # writes ./.escrow-local.env
+set -a; . ./.escrow-local.env; set +a
+npm run verify:escrow         # SKIPs cleanly if no RPC is reachable
+
+# 9. Production build & ESLint validation
 npm run build
 npm run lint
 ```
@@ -502,6 +515,13 @@ idempotency store for a shared one (Redis/Postgres), then run multiple instances
   one-time nonce, and fail closed. It is *not* the Coinbase x402 "exact" on-chain
   payload (a base64 partially-signed transaction requiring the `@x402` SDK); wiring
   that for byte-for-byte facilitator interop is the tracked follow-up.
+- **Escrow settlement is real but the program transfers state, not tokens (yet).** The
+  Anchor program locks SPL collateral on `initialize_escrow` and, on
+  `settle_and_release_excess`, records the freed capital + proof hash and emits the
+  `MarginSettledAndReleasedEvent` (auditable on-chain) — the proportional vault→desk
+  CPI payout is the next program revision. The API never claims funds moved when they
+  did not: iff `ESCROW_REAL_SETTLE=true` it returns the real program transaction
+  signature, otherwise `transactionSignature:null`.
 - The file session store is single-instance; `SESSION_STORE_MODE=sqlite` (node:sqlite,
   no external service) lets several app processes share one volume, but a true
   multi-machine deployment still needs the Postgres/Redis implementation of the same
