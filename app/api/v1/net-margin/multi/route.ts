@@ -4,7 +4,10 @@ import { randomBytes } from "node:crypto";
 import { ApiError, parseBody, rateLimitFor, readJsonBody, withApi } from "@/lib/http";
 import { env, chainSchema } from "@/lib/env";
 import { isPaid, paymentRequired } from "@/lib/x402";
-import { priceAndNormalizeLegsWithVenueCheck as priceAndNormalizeLegs } from "@/lib/positions";
+import {
+  confidentialSafeWarnings,
+  priceAndNormalizeLegsWithVenueCheck as priceAndNormalizeLegs,
+} from "@/lib/positions";
 import { rawLegSchema } from "@/lib/contracts";
 import { nPartyNetted, type ChainId } from "@/lib/margin";
 import { makeLogger } from "@/lib/logger";
@@ -85,6 +88,7 @@ export const POST = withApi(async ({ req }) => {
   const books = [];
   const partyLegHashes: Record<string, string> = {};
   const warnings: string[] = [];
+  const marksByBucket: Record<string, number> = {};
 
   for (const p of body.parties) {
     // `party` carries no economic content (it's re-assigned from the envelope);
@@ -112,6 +116,7 @@ export const POST = withApi(async ({ req }) => {
       warnings: priced.warnings,
     });
     partyLegHashes[p.party] = hashLegs(priced.legs);
+    Object.assign(marksByBucket, priced.marksApplied);
   }
 
   const marginResult = nPartyNetted(books);
@@ -128,6 +133,7 @@ export const POST = withApi(async ({ req }) => {
     backendKind: "simulated",
     commitmentHash,
     partyLegHashes,
+    marksByBucket,
     combinedNettedUsd: marginResult.nettedCombinedUsd,
     grossNotionalUsd: marginResult.grossNotionalUsd,
     perPartySiloedUsd: marginResult.perPartySiloedUsd ?? {},
@@ -153,7 +159,7 @@ export const POST = withApi(async ({ req }) => {
       warnings: b.warnings,
     })),
     margin: marginResult,
-    warnings,
+    warnings: confidentialSafeWarnings(warnings),
     trustModel: "simulated",
     attestation: null,
     disclaimer:

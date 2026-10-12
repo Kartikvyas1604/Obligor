@@ -4,7 +4,10 @@ import { ApiError, parseBody, rateLimitFor, readJsonBody, withApi } from "@/lib/
 import { chainSchema } from "@/lib/env";
 import { isPaid, paymentRequired } from "@/lib/x402";
 import { getConfidentialBackend } from "@/lib/confidential";
-import { priceAndNormalizeLegsWithVenueCheck as priceAndNormalizeLegs } from "@/lib/positions";
+import {
+  confidentialSafeWarnings,
+  priceAndNormalizeLegsWithVenueCheck as priceAndNormalizeLegs,
+} from "@/lib/positions";
 import { makeLogger } from "@/lib/logger";
 import { computeCommitmentHash, hashLegs } from "@/lib/commitment";
 import { registerComputation } from "@/lib/computation-registry";
@@ -139,6 +142,9 @@ export const POST = withApi(async ({ req }) => {
       backendKind,
       commitmentHash,
       partyLegHashes,
+      // Public marks used for each bucket — lets /verify reproduce the exact
+      // leg hash deterministically without a live oracle.
+      marksByBucket: { ...pricedA.marksApplied, ...pricedB.marksApplied },
       combinedNettedUsd: marginResult.nettedCombinedUsd,
       grossNotionalUsd: marginResult.grossNotionalUsd,
       perPartySiloedUsd: { A: marginResult.siloedAUsd, B: marginResult.siloedBUsd },
@@ -166,7 +172,8 @@ export const POST = withApi(async ({ req }) => {
     chain: chainL,
     partyAWallet: bookA.wallet,
     partyBWallet: bookB.wallet,
-    warnings: [...warnA, ...warnB],
+    // Aggregate-only: never echo a desk's claimed mark (position data).
+    warnings: confidentialSafeWarnings([...warnA, ...warnB]),
     ...(commitmentHash ? { commitmentHash } : {}),
     bookSummary: {
       legCountA: bookA.legs.length,

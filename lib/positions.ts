@@ -42,6 +42,9 @@ export interface PricedBook {
   legs: PositionLeg[];
   warnings: string[];
   priceSources: Record<string, OraclePrice>;
+  /** bucket (uppercase) → the USD mark actually applied. Public market data,
+   *  recorded so /verify can reproduce the exact leg hash without a live feed. */
+  marksApplied: Record<string, number>;
 }
 
 function defaultHaircut(bucket: string, side: Side): number {
@@ -55,6 +58,12 @@ export type PositionSource = PositionLeg["source"];
 
 export interface PriceOptions {
   source: PositionSource;
+  /**
+   * Reproduce a prior pricing run with the exact marks it used (bucket →
+   * USD), skipping the live oracle. Used by /net-margin/verify so a moved
+   * oracle cannot change a committed leg hash.
+   */
+  marksOverride?: Record<string, number>;
 }
 
 /** Utility for the UI/netting-calculator: build an oracle-priced leg from a notional target. */
@@ -140,6 +149,14 @@ export async function priceAndNormalizeLegs(
     const bucket = leg.bucket.toUpperCase();
     if (marksByBucket.has(bucket)) continue;
 
+    // Reproduce a committed run: reuse the exact marks it applied. No oracle
+    // fetch, no new warnings — verification must be deterministic.
+    const override = options.marksOverride?.[bucket];
+    if (typeof override === "number" && Number.isFinite(override) && override > 0) {
+      marksByBucket.set(bucket, { markUsd: override, oracle: null });
+      continue;
+    }
+
     const oracleSymbol = BUCKET_ORACLE_SYMBOL[bucket] ?? null;
     if (!oracleSymbol) {
       marksByBucket.set(bucket, { markUsd: leg.markUsd, oracle: null });
@@ -217,7 +234,10 @@ export async function priceAndNormalizeLegs(
     });
   }
 
-  return { legs, warnings, priceSources };
+  const marksApplied: Record<string, number> = {};
+  for (const [bucket, v] of marksByBucket) marksApplied[bucket] = v.markUsd;
+
+  return { legs, warnings, priceSources, marksApplied };
 }
 
 /** Validate + price legs, then add venue (Drift) verification annotations. */
@@ -299,6 +319,21 @@ async function driftVenueAnnotations(
       `venue drift: ${err instanceof Error ? err.message : String(err)} — net proceeds as internal simulation`,
     );
   }
+}
+
+/**
+ * Strip position-revealing detail from warnings before returning them from a
+ * confidential (aggregate-only) endpoint. Deviation/desk-mark messages embed a
+ * desk's claimed mark, which is position data; only market-data warnings
+ * (oracle staleness, venue verification status) are safe to echo.
+ */
+export function confidentialSafeWarnings(warnings: string[]): string[] {
+  return warnings.filter(
+    (w) =>
+      !/Supplied mark/i.test(w) &&
+      !/desk-supplied mark/i.test(w) &&
+      !/deviates/i.test(w),
+  );
 }
 
 /** Build a labeled empty book for a wallet (in-session placeholder). */

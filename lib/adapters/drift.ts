@@ -83,6 +83,8 @@ export interface DriftPerpExposure {
   side: "long" | "short";
   /** Absolute notional in USD at the venue's live mark. */
   usd: number;
+  /** Provenance of the mark used to size the notional (live vs. labeled fallback). */
+  markStatus: OraclePrice["status"];
 }
 
 export interface DriftSubAccount {
@@ -176,6 +178,7 @@ export async function fetchDriftSubAccount(authorityOverride?: string): Promise<
         bucket: INSTRUMENT_TO_BUCKET[symbol],
         side: baseAssetAmount > 0 ? "long" : "short",
         usd,
+        markStatus: mark.status,
       });
     }
 

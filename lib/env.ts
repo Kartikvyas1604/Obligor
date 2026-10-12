@@ -142,6 +142,22 @@ const envSchema = z.object({
     subAccountCacheMs: positiveInt(30_000),
   }),
 
+  confidential: z.object({
+    // When true, the confidential backends MUST carry a real transport; a
+    // missing/unsupported wire fails closed instead of silently simulating.
+    realTransports: boolish(false),
+    // Reserved for the Arcium MXE transport. The real encryption lifecycle is
+    // NOT wired in this build, so a set endpoint does not make ArciumBackend
+    // claim MPC — with realTransports=true it fails closed instead.
+    arciumMxeEndpoint: z.string().optional().default(""),
+    // Real enclave HTTP transport (enclave/obligor-enclave). When set and
+    // CONFIDENTIAL_REAL_TRANSPORTS=true, nets run over this wire.
+    enclaveEndpoint: z.string().optional().default(""),
+    // Require a verified hardware attestation quote before claiming TEE. When
+    // off, an un-attested enclave run is still labelled simulated_plaintext.
+    enclaveQuoteRequired: boolish(false),
+  }),
+
   escrow: z.object({
     // When true, POST /v1/escrow/settle emits a REAL on-chain settlement against
     // the deployed obligor-escrow program and returns its transaction signature.

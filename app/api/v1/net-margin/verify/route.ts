@@ -52,7 +52,12 @@ export const POST = withApi(async ({ req }) => {
     delete (copy as { party?: unknown }).party;
     return copy;
   });
-  const priced = await priceAndNormalizeLegs(body.party, raw, { source: "manual" });
+  // Reproduce the committed run with the exact marks it applied, so a moved
+  // oracle cannot change the hash and yield a false negative.
+  const priced = await priceAndNormalizeLegs(body.party, raw, {
+    source: "manual",
+    marksOverride: record.marksByBucket,
+  });
 
   const storedPartyHash = record.partyLegHashes[body.party];
   const recomputedHash = hashLegs(priced.legs);
