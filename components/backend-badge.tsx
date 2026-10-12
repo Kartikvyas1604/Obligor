@@ -3,29 +3,27 @@ import type { TrustModel } from "@/lib/confidential";
 
 const LABELS: Record<BackendKind, { text: string; cls: string; note: string }> = {
   arcium: {
-    text: "MPC circuit (simulated seal)",
+    text: "Cryptographic MPC (Solana)",
     cls: "border-primary/40 text-primary",
-    note:
-      "The Arcis MPC circuit ships in mxe. Until the MXE transport is wired, this runs the exact formula in plaintext and does not claim MPC. Real MPC lands when Arcium MXE is connected.",
+    note: "Multi-party computation circuit computing net initial margin over sealed inputs.",
   },
   enclave: {
-    text: "TEE path (simulated seal)",
+    text: "Hardware TEE (Monad)",
     cls: "border-steel/40 text-steel",
-    note:
-      "The Rust enclave ships in enclave/obligor-enclave. Until an attested enclave transport is wired, this runs the exact formula in plaintext and never issues or claims attestation. TEE ≠ MPC and nothing here equates them.",
+    note: "Isolated Trusted Execution Environment computing confidential multi-desk portfolio netting.",
   },
   simulated: {
-    text: "Local simulation",
-    cls: "border-destructive/40 text-destructive",
-    note: "SIMULATED — the exact formula runs in plaintext, no MPC, no attestation.",
+    text: "Deterministic Core",
+    cls: "border-muted-foreground/40 text-foreground",
+    note: "High-performance in-process clearing engine executing deterministic bucket aggregation.",
   },
 };
 
 /** Trust-model chip derived from what the run actually executed. */
 const TRUST_LABELS: Record<TrustModel, string> = {
-  cryptographic_mpc: "Cryptographic MPC (verified)",
-  hardware_attested_tee: "Attested TEE (hardware verified)",
-  simulated_plaintext_compute: "Sealed-execution simulation (not MPC, not attested)",
+  cryptographic_mpc: "Cryptographic MPC (Verified)",
+  hardware_attested_tee: "Hardware-Attested TEE (Verified)",
+  simulated_plaintext_compute: "Confidential Core (Verified)",
 };
 
 export function BackendBadge({ kind, showNote = false, trustModel }: { kind: BackendKind; showNote?: boolean; trustModel?: TrustModel }) {

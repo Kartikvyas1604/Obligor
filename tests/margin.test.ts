@@ -129,4 +129,14 @@ describe("twoPartyNetted", () => {
   it("formats USD with two decimals", () => {
     assert.equal(usd(1234.5), "$1,234.50");
   });
+
+  it("nets the golden reference portfolios exactly: $46,500 -> $24,500 ($22,000 savings)", async () => {
+    const { solanaPartyA, solanaPartyB } = await import("../lib/fixtures");
+    const res = twoPartyNetted(solanaPartyA, solanaPartyB);
+    assert.equal(res.siloedAUsd, 26_750);
+    assert.equal(res.siloedBUsd, 19_750);
+    assert.equal(res.siloedCombinedUsd, 46_500);
+    assert.equal(res.nettedCombinedUsd, 24_500);
+    assert.equal(res.savingsUsd, 22_000);
+  });
 });

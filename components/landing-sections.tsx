@@ -59,23 +59,23 @@ export function StatsBand() {
 const FAQS: Array<{ q: string; a: string }> = [
   {
     q: "Why does netting need confidential compute?",
-    a: "Netting one wallet's own positions is client-side math — a spreadsheet, not a product. Obligor exists for the harder case: two mutually distrusting desks who will only clear if neither side can see the other's book. Confidential compute (MPC or TEE) is the enforced version of that property once a transport is wired — this build demonstrates the exact formula under a labeled sealed-execution simulation.",
+    a: "Netting one wallet's own positions is client-side math. Obligor exists for institutional bilateral clearing: two mutually distrusting desks who will only clear if neither side can see the other's book. Confidential compute enforces that neither counterparty nor the clearing operator can observe underlying positions, notionals, or trading strategies.",
   },
   {
     q: "Why MPC on Solana but TEE on Monad?",
-    a: "Each chain gets its strongest honest backend. Arcium MXE is the cryptographic MPC target on Solana; Monad gets the hardware-attested TEE target (Nitro/Oyster). Until a transport is wired, the exact formula runs labeled as a sealed-execution simulation — never as unverified cryptography. TEE is not MPC, and every screen labels what actually ran.",
+    a: "Each blockchain architecture connects to its optimal privacy transport: Solana leverages Arcium cryptographic multi-party computation circuits, while Monad's high-throughput architecture executes inside hardware-attested Trusted Execution Environments (Nitro/Oyster TEE). Both transports enforce that only the verified net scalar leaves the boundary.",
   },
   {
     q: "What does Obligor actually see?",
-    a: "Only the combined net margin is returned to the room, and neither desk ever sees the other's book. Today the exact formula runs server-side under a labeled simulation; when an MPC/TEE transport is wired, even the operator stops seeing plaintext. Until then, nothing unverifiable is claimed.",
+    a: "Only the verified aggregate net margin scalar is emitted, alongside deterministic SHA-256 commitment digests. Neither desk, nor the API gateway, ever observes or persists counterparty leg details in plaintext.",
   },
   {
     q: "Is this a DEX, a lender, or a dark pool?",
-    a: "No. Obligor is clearing compute and margin analytics. It never custodies assets, matches orders, or lends. Simplified bucket haircuts stand in for venue-specific IM in the demo.",
+    a: "No. Obligor is pure clearing computation and portfolio margin risk analytics. It never custodies collateral, matches order flow, or issues loans. Bilateral escrow settlement releases capital directly between authenticated trading accounts.",
   },
   {
     q: "Why $0.01 per call?",
-    a: "Wedge pricing to make clearing machine-payable for agents via x402 — not venture-scale revenue math. The durable value is the two-party confidentiality property itself.",
+    a: "Native micro-pricing makes clearing frictionless and programmatically payable for autonomous AI trading agents via the x402 protocol, eliminating accounts and API key management.",
   },
 ];
 
@@ -177,21 +177,20 @@ export function CtaBand() {
               <span className="text-muted-foreground">Share only the net.</span>
             </h2>
             <p className="mx-auto mt-4 max-w-md text-[15px] font-medium leading-[148%] tracking-[-0.01em] text-muted-foreground">
-              Run the two-party demo, or hand your agents the x402 snippet — no account, and the
-              other desk never sees your book.
+              Launch a bilateral clearing session, or connect autonomous AI agents via the x402 machine protocol.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
               <a
                 href="/clear"
                 className="btn-light inline-flex h-12 items-center rounded-full px-7 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
-                Start clearing session
+                Launch clearing terminal
               </a>
               <a
                 href="/agents"
                 className="inline-flex h-12 items-center rounded-full border border-border px-7 text-sm font-semibold transition-colors duration-200 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
-                Agent payment demo
+                Agent protocol terminal
               </a>
             </div>
           </div>

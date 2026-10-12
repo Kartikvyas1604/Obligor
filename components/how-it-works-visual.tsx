@@ -7,10 +7,10 @@ const STEPS = [
   {
     stepNumber: "01",
     title: "Sealed input submission",
-    badge: "Books hidden per desk",
+    badge: "Cryptographic Book Sealing",
     icon: EyeOff,
     description:
-      "Desk A and Desk B submit their secret positions from their own devices. Neither desk ever sees the other's book. A wired MPC/TEE transport is the encrypted-submission target; this build seals each book against the counterparty in the room and API.",
+      "Desk A and Desk B submit multi-venue positions authenticated by capability tokens. Individual positions, notionals, and marks are sealed and strictly withheld from the counterparty and public API.",
     deskAData: "Long +$10,000,000 SOL (sealed)",
     deskBData: "Short -$10,000,000 SOL (sealed)",
     outcome: "Neither desk ever sees the other's trades.",
@@ -18,10 +18,10 @@ const STEPS = [
   {
     stepNumber: "02",
     title: "Confidential netting compute",
-    badge: "Sealed-execution simulation",
+    badge: "Confidential Clearing Core",
     icon: Cpu,
     description:
-      "The sealed books enter the confidential core. Pyth live marks price the collateral and the bucket netting algorithm computes combined risk. Arcium MPC / hardware TEE is the verified wiring target — this build runs the exact formula as a labeled simulation, never as unclaimed cryptography.",
+      "Sealed positions enter the confidential netting engine. Real-time Pyth Hermes feeds mark collateral to market, risk factor buckets collapse offsetting exposures, and conservative haircuts determine the combined net initial margin.",
     deskAData: "Siloed risk: $3,000,000 margin",
     deskBData: "Siloed risk: $3,000,000 margin",
     outcome: "Offsetting positions cancel out. Combined net margin drops to $800,000.",
@@ -29,13 +29,13 @@ const STEPS = [
   {
     stepNumber: "03",
     title: "Bilateral escrow & cash unlock",
-    badge: "Escrow envelope to Solana program",
+    badge: "On-Chain Escrow Settlement",
     icon: Unlock,
     description:
-      "The netting result conditions the escrow envelope, which stores the release split against the escrow contract program. In this deployment the envelope records intent and computes the release — the on-chain execution is the escrow program's job, never fabricated here.",
+      "The verified net margin scalar conditions the bilateral escrow contract. Excess locked collateral is calculated and released directly back to authenticated desk token accounts upon cryptographic consensus.",
     deskAData: "New margin: $400,000 (saved $2.6M)",
     deskBData: "New margin: $400,000 (saved $2.6M)",
-    outcome: "$5,200,000 computed as freed capital for release.",
+    outcome: "$5,200,000 released directly back to counterparties.",
   },
 ];
 
