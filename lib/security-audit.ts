@@ -32,6 +32,11 @@ export interface SecurityAudit {
   production: boolean;
   checks: AuditCheck[];
   verdict: "pass" | "review";
+  /**
+   * Copy-paste probes a reviewer can run to verify the guards themselves.
+   * `$ORIGIN` is the deployment origin (e.g. http://localhost:4021).
+   */
+  probeCommands: string[];
   disclaimer: string;
 }
 
@@ -251,6 +256,13 @@ export function buildSecurityAudit(): SecurityAudit {
     production,
     checks,
     verdict: status === "fail" ? "review" : status === "warn" ? "review" : "pass",
+    probeCommands: [
+      `curl -i -s -X POST "$ORIGIN/v1/net-margin" -H 'content-type: application/json' -d '{"chain":"solana","partyA":{"wallet":"11111111111111111111111111111111"},"partyB":{"wallet":"11111111111111111111111111111111"}}'   # expect 402 PAYMENT-REQUIRED (or 503 PAYMENTS_NOT_CONFIGURED if no payTo) — never 200`,
+      `curl -i -s -X POST "$ORIGIN/v1/net-margin" -H 'content-type: application/json' -H 'x-payment-signature: dummy' -d '{"chain":"solana","partyA":{"wallet":"11111111111111111111111111111111"},"partyB":{"wallet":"11111111111111111111111111111111"}}'   # expect 402 (invalid signature), not 200`,
+      `curl -i -s -X POST "$ORIGIN/v1/net-margin" -H 'content-type: application/json' -d '{}'   # expect 422 VALIDATION_FAILED with structured issues`,
+      `curl -i -s "$ORIGIN/v1/sessions/does-not-exist"   # expect 404 — unknown room, no leaked state`,
+      `curl -i -s "$ORIGIN/v1/security/self-audit"   # expect this audit JSON, ok:true`,
+    ],
     disclaimer:
       "Self-audit of the demo surface. It reflects this deployment's configuration and live state — it is not a substitute for a third-party penetration test.",
   };

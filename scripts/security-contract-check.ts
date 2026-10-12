@@ -307,13 +307,18 @@ async function main() {
   });
 
   await check("POST /net-margin/parallel < 3 pairs → 400", async () => {
-    const { status } = await req("POST", "/api/v1/net-margin/parallel", {
-      chain: "monad",
-      pairs: [
-        { pairId: "p1", a: { wallet: WALLET_A, legs: [] }, b: { wallet: WALLET_B, legs: [] } },
-        { pairId: "p2", a: { wallet: WALLET_A, legs: [] }, b: { wallet: WALLET_B, legs: [] } },
-      ],
-    });
+    const { status } = await req(
+      "POST",
+      "/api/v1/net-margin/parallel",
+      {
+        chain: "monad",
+        pairs: [
+          { pairId: "p1", a: { wallet: WALLET_A, legs: [] }, b: { wallet: WALLET_B, legs: [] } },
+          { pairId: "p2", a: { wallet: WALLET_A, legs: [] }, b: { wallet: WALLET_B, legs: [] } },
+        ],
+      },
+      { "x-payment-signature": PAY },
+    );
     assert(status === 400, `expected 400, got ${status}`);
   });
 

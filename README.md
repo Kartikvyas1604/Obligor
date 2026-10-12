@@ -121,17 +121,17 @@ $$\text{IM}_{\text{siloed, combined}} = \text{IM}_{\text{siloed}}(A) + \text{IM}
 
 Obligor implements a pluggable `ConfidentialBackend` interface. The mathematical engine is identical everywhere; what changes per network is the trust transport:
 
-| Chain | Backend Implementation | Trust Model | Role |
+| Chain | Backend Implementation | Trust Model | Status |
 | :--- | :--- | :--- | :--- |
-| **Solana** (Primary) | `ArciumBackend` (Arcis MXE) | **Cryptographic MPC** — no single TEE operator, inputs encrypted with X25519 & RescueCipher | Primary Colosseum Build |
-| **Monad** (Expansion) | `EnclaveBackend` (AWS Nitro / Marlin Oyster) | **Hardware-Attested TEE** — isolated hardware enclave with signed PCR0 measurement quote | Parallel Multi-Pair Clearing |
-| **Local / Test** | `SimulatedBackend` | **In-Process Compute** — local execution labeled `SIMULATED` | Instant Client Exploration |
+| **Solana** | `ArciumBackend` (Arcis MXE) | **Cryptographic MPC** target — no single operator can observe decrypted books once the MXE lifecycle is wired | Not wired: runs the exact formula as labeled `simulated_plaintext_compute` |
+| **Monad** | `EnclaveBackend` (AWS Nitro / Marlin Oyster) | **Hardware-Attested TEE** target — enclave sealed by a measured PCR0 quote | Enclave wire real but un-attested; TEE claimed only on a host-verified measurement match |
+| **Local / Test** | `SimulatedBackend` | **In-Process Compute** — local execution labeled `SIMULATED` | Available |
 
 ### The Honesty Rule: $\text{TEE} \neq \text{MPC}$
-Both approaches deliver real confidentiality with distinct trust trade-offs:
-- **Cryptographic MPC (Arcium):** Distributes trust across multi-party execution nodes using threshold cryptography. No single entity, cloud provider, or hardware manufacturer can observe decrypted books.
-- **Hardware-Attested TEE (AWS Nitro / Marlin Oyster):** Relies on isolated CPU secure enclaves and cryptographic PCR0 attestation quotes. Delivers high execution throughput suitable for Monad's parallel architecture.
-- **Obligor's Rule:** Obligor labels every backend on screen and in API responses. We never conflate TEE with MPC.
+The two transports deliver confidentiality with distinct trust trade-offs. Neither is claimed until it is verifiably wired:
+- **Cryptographic MPC (Arcium) — target:** Distributes trust across multi-party execution nodes using threshold cryptography so no single entity observes decrypted books. The `@arcium-hq/client` MXE lifecycle is the tracked follow-up; until then `ArciumBackend` labels every run `simulated_plaintext_compute` and never POSTs plaintext while claiming MPC.
+- **Hardware-Attested TEE (AWS Nitro / Marlin Oyster) — target:** Relies on isolated CPU secure enclaves and cryptographic PCR0 attestation quotes. The Rust enclave in `enclave/obligor-enclave/` is a real wire, but it is UNTRUSTED: the host claims `hardware_attested_tee` only after independently matching the returned measurement (and PCR0) against `ENCLAVE_EXPECTED_MEASUREMENT` / `ENCLAVE_EXPECTED_PCR0`. A bare `verified:true` from the enclave is not sufficient.
+- **Obligor's Rule:** Obligor labels every backend on screen and in API responses — and never upgrades a label it cannot verify. We never conflate TEE with MPC.
 
 ---
 
@@ -142,7 +142,7 @@ Explore all four surfaces directly in your browser:
 - **Interactive Portfolio Setup:** Pair Party A (Desk Alpha) and Party B (Counterparty Desk) via Solana wallet connect or pre-loaded fixtures.
 - **Live Netting Calculator:** Real-time dual slider and typed numerical inputs showing instant siloed vs netted margins.
 - **Mock Equity Injection:** Dynamically attach or detach tokenized equity positions (`tAAPL` Long/Short) to evaluate cross-asset clearing.
-- **Pluggable Backend Toggle:** Switch seamlessly between `Arcium MPC` (Solana), `TEE Attested` (Monad), and `Simulated Local`.
+- **Pluggable Backend Toggle:** Switch between the `MPC target` (Solana), `TEE target` (Monad), and `Simulated Local` backends — each labeled honestly with the trust model that actually ran.
 - **Live API Routing:** Option to route clearing computations through the live Next.js API gateway (`/api/v1/net-margin`).
 
 ### 2. Adversarial Counterfactual (`/adversarial`)
@@ -154,12 +154,12 @@ Explore all four surfaces directly in your browser:
 ### 3. Monad Parallel Multi-Pair Clearing (`/monad`)
 - **Monad High-Throughput Differentiator:** Simultaneously nets **$\ge 3$ desk pairs** in one epoch.
 - **Real-Time Concurrency Telemetry:** Live epoch execution timer, concurrency counter, and per-pair capital savings cards.
-- **Hardware Attestation Inspector:** Real-time PCR0 measurement and SHA256 enclave quote verification.
+- **Attestation Inspector:** Surfaces enclave attestation metadata only when the enclave actually presents it — no TEE is claimed otherwise, and the trust model stays labeled.
 
 ### 4. Machine-Payable Agents (`/agents`)
 - **x402 V2 Terminal Runners:** Autonomous agents querying the gated clearing API.
-- **HTTP 402 Protocol Flow:** Demonstrates `402 PAYMENT-REQUIRED` challenge handling, automated $0.01 USDC payment signing, and instant `200 OK` aggregate margin response.
-- **Privacy Audit Inspector:** Expandable raw JSON viewer proving zero individual leg leakage.
+- **HTTP 402 Protocol Flow:** Demonstrates `402 PAYMENT-REQUIRED` challenge handling, the $0.01 USDC payment step (real ed25519 signing ships in `scripts/sign-x402-receipt.ts`; the browser demo labels its synthetic signature), and the `200 OK` aggregate margin response.
+- **Privacy Audit Inspector:** Expandable raw JSON viewer showing only the aggregate is returned — no individual leg is included.
 
 ---
 
@@ -170,8 +170,8 @@ Obligor explicitly labels what is real code, what is fixture, and what is out of
 | :--- | :--- | :--- |
 | **Two-Party Netting Formula** | **Real** | Pure TypeScript source of truth (`lib/margin.ts`) with golden tests; mirrored in the Arcis circuit and the Rust enclave |
 | **Position ingestion** | **Real (oracle-priced)** | Books enter via desk input, deal rooms, or the API; every mark re-priced against live Pyth Hermes with deviation/stale/fallback provenance labels. Fabricated per-party quantities were removed — positions are never invented. |
-| **Confidential execution (MPC / TEE)** | **Real wire (enclave) — un-attested** | The Rust enclave (`enclave/obligor-enclave/`) is a real, dep-free HTTP service (GET `/health`, POST `/net`); with `CONFIDENTIAL_REAL_TRANSPORTS=true` + `ENCLAVE_ENDPOINT`, Node **sends both books to it and consumes the enclave's output** (it does not recompute locally). Because no hardware attestation quote is issued outside a real Nitro/Oyster VM, trustModel stays `simulated_plaintext_compute` with an honest note. The Arcis circuit (`mxe/`) remains CI-compiled sealed-execution simulation until the `@arcium-hq/client` MXE lifecycle is wired. An unconnected transport **fails closed**, never silently simulates. |
-| **Hardware attestation** | **Not claimed** | `hardware_attested_tee` is returned **only** when the enclave returns a verified hardware quote (`attestation.verified === true` with a non-empty `quote_hex`). The current enclave returns `provider:"none", verified:false` plus a SHA256 proof-of-execution digest, so no TEE is claimed. A genuine Nitro/Oyster NSM attestation document is the only thing that ever flips `verified`. |
+| **Confidential execution (MPC / TEE)** | **Enclave wire real — un-attested** | The Rust enclave (`enclave/obligor-enclave/`) is a real, dep-free HTTP service (GET `/health`, POST `/net`) using integer-cents math and deterministic ordering; with `CONFIDENTIAL_REAL_TRANSPORTS=true` + `ENCLAVE_ENDPOINT`, Node **sends both books to it and consumes the enclave's output** (it does not recompute locally). Because no hardware attestation quote is issued outside a real Nitro/Oyster VM, trustModel stays `simulated_plaintext_compute` with an honest note. The Arcis circuit (`mxe/`) remains CI-compiled sealed-execution simulation until the `@arcium-hq/client` MXE lifecycle is wired. An unconnected transport **fails closed**, never silently simulates. |
+| **Hardware attestation** | **Not claimed (host-verified only)** | The enclave is UNTRUSTED: `hardware_attested_tee` is returned **only** when the host independently matches the returned measurement (and, if set, PCR0) against `ENCLAVE_EXPECTED_MEASUREMENT` / `ENCLAVE_EXPECTED_PCR0`. A bare `attestation.verified === true` from the enclave is **not** sufficient. The current enclave returns `provider:"none", verified:false` plus a SHA256 proof-of-execution digest, so no TEE is ever claimed; with no allowlist configured, TEE is never claimed (conservative). |
 | **Mock Equity `tAAPL`** | **Mock** | Priced from the live Pyth AAPL mark; adapter-ready for xStocks/Backed rails; never custody |
 | **Parallel Multi-Pair Clearing** | **Real** | `/api/v1/net-margin/parallel` nets ≥3 desk pairs concurrently per epoch (server-enforced minimum); trust model labeled from execution |
 | **x402 V2 Machine Payments** | **Real verification — honest** | 402 challenge built from env terms is real; the Monad facilitator (`x402-facilitator.molandak.org/supported`) is live-verified by `npm run verify:x402`. Obligor signed receipts are **cryptographically verified** (ed25519 over `network/asset/payTo/amount` + one-time nonce) with `node:crypto` via `lib/x402.ts`; a forged/tampered envelope is rejected outright (`X402_REQUIRE_VERIFIED_SIGNATURES` forces fail-closed). The legacy format-check escape hatch is dev-only. The envelope is Obligor's own wire format — Coinbase x402 "exact" on-chain settlement (`@x402` SDK) is the tracked interop follow-up. `SOLANA_PAY_TO`/`MONAD_PAY_TO` gates enablement per chain. |
@@ -312,7 +312,7 @@ Obligor/
 ├── enclave/
 │   └── obligor-enclave/         # Rust AWS Nitro / Marlin Oyster TEE enclave
 │       ├── Cargo.toml           # Enclave dependencies (sha2, hex, serde)
-│       └── src/main.rs          # Fixed-point two-party netting & PCR0 attestation generator
+│       └── src/main.rs          # Integer-cents two-party netting & honest un-attested default
 ├── scripts/
 │   ├── demo-agent-a.ts          # Party A x402 client script
 │   ├── demo-agent-b.ts          # Party B x402 client script
