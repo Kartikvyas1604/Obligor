@@ -37,7 +37,7 @@ function BookRow({
       <div className="flex shrink-0 items-center gap-1.5">
         <span className="font-mono text-[11px] tabular-nums text-foreground">{amount}</span>
         {sealed ? (
-          <Lock className="h-3 w-3 text-steel" aria-label="Encrypted" />
+          <Lock className="h-3 w-3 text-steel" aria-label="Sealed" />
         ) : (
           <span className="h-3 w-3" aria-hidden />
         )}
@@ -87,7 +87,7 @@ export function NetVisual() {
         <div className="flex flex-col items-center gap-1.5 rounded-xl border border-border bg-card px-3.5 py-2.5">
           <Cpu className="h-4 w-4 text-steel" aria-hidden />
           <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
-            MPC / TEE
+            sealed compute
           </span>
         </div>
 
@@ -105,9 +105,8 @@ export function NetVisual() {
 
       <div className="mt-4 flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2">
         <span className="font-mono text-[10px] text-muted-foreground">A input</span>
-        <span className="font-mono text-[10px] text-muted-foreground">?</span>
+        <span className="font-mono text-[10px] uppercase text-steel">only the aggregate is shared</span>
         <span className="font-mono text-[10px] text-muted-foreground">B input</span>
-        <span className="font-mono text-[10px] uppercase text-steel">never decrypted</span>
       </div>
     </VignetteFrame>
   );
@@ -115,12 +114,12 @@ export function NetVisual() {
 
 export function EscrowVisual() {
   return (
-    <VignetteFrame label="On-chain escrow">
+    <VignetteFrame label="Escrow envelope to Solana program">
       <div className="flex items-center justify-between gap-3">
         <div className="flex flex-col items-center gap-1.5 rounded-xl border border-border bg-card px-3.5 py-3">
           <Unlock className="h-4 w-4 text-foreground" aria-hidden />
           <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
-            escrow
+            escrow envelope
           </span>
         </div>
 
@@ -149,7 +148,7 @@ export function EscrowVisual() {
 
       <div className="mt-3 flex items-center justify-between rounded-lg border border-success/25 bg-success/10 px-3 py-2">
         <span className="font-mono text-[10px] uppercase tracking-wider text-success">
-          Excess released at attestation
+          Release computed on netting proof
         </span>
         <span className="flex items-center gap-1 font-mono text-[11px] font-semibold tabular-nums text-success">
           <ArrowUpRight className="h-3 w-3" aria-hidden />

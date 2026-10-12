@@ -18,7 +18,7 @@ export function HeroMockup() {
 
           <div className="flex items-center gap-1.5 rounded-full border border-border bg-secondary px-3 py-1 font-mono text-[11px] text-muted-foreground">
             <span className="h-1.5 w-1.5 rounded-full bg-steel" aria-hidden />
-            CONFIDENTIAL MPC
+            SEALED SIMULATION
           </div>
         </div>
 
@@ -151,7 +151,7 @@ export function HeroMockup() {
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-xs text-muted-foreground">
           <div className="flex items-center gap-2">
             <Lock className="h-3.5 w-3.5" aria-hidden />
-            <span className="font-mono text-[11px]">Zero plaintext leaks enforced</span>
+            <span className="font-mono text-[11px]">Counterparty books never cross</span>
           </div>
           <span className="font-mono text-[11px] text-foreground">x402 V2 micro-settled</span>
         </div>

@@ -289,7 +289,7 @@ export function ThreePartyCard() {
             )}{" "}
             {result.warnings && result.warnings.length > 0
               ? `· ${result.warnings.length} warning(s), listed in the raw API response.`
-              : "· Aggregate-only output — no per-leg plaintext leaves the server."}
+              : "· Aggregate-only output — no per-leg plaintext is returned to the room."}
           </p>
         </div>
       )}

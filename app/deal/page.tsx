@@ -126,13 +126,13 @@ export default function DealLauncherPage() {
               {[
                 {
                   id: "arcium",
-                  title: "MPC (Solana) — strongest",
-                  desc: "Both books stay encrypted end-to-end. Not even a single operator can read them.",
+                  title: "MPC (Solana) — target",
+                  desc: "Target: both books stay encrypted end-to-end. Until the MXE transport is wired, the exact formula runs as a labeled sealed-execution simulation.",
                 },
                 {
                   id: "enclave",
-                  title: "Hardware enclave (Monad)",
-                  desc: "Books are sealed inside a hardware-locked box with a verifiable receipt (attestation).",
+                  title: "Hardware enclave (Monad) — target",
+                  desc: "Target: a hardware-locked enclave with a verifiable attestation receipt. This build labels it a simulation and never claims an attestation it did not verify.",
                 },
               ].map((b) => (
                 <button

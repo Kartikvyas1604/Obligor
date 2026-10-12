@@ -14,19 +14,19 @@ const THREE_WAYS = [
   {
     index: "01",
     title: "Seal both books",
-    body: "Each desk submits its portfolio encrypted, from its own device, with independent keys. Plaintext legs never touch the wire.",
+    body: "Each desk seals its book from its own side — the counterparty never sees the plaintext, and only the netting result is shared. This build runs the labeled sealed-execution simulation the confidential engine targets.",
     visual: <SealVisual />,
   },
   {
     index: "02",
     title: "Net in the dark",
-    body: "Arcium MPC on Solana or an attested TEE on Monad computes a single scalar: the combined net initial margin.",
+    body: "A sealed execution environment computes a single scalar: the combined net initial margin. Arcium MPC on Solana or an attested TEE on Monad is the verified drop-in target — never claimed until actually wired.",
     visual: <NetVisual />,
   },
   {
     index: "03",
     title: "Free the collateral",
-    body: "On-chain escrow settles the net obligation. Excess capital returns to both desks the moment the attestation lands.",
+    body: "The escrow envelope computes the release against the verified netting result — in this deployment the Solana program is the settlement rail that executes it. Excess capital returns to both desks when the release settles.",
     visual: <EscrowVisual />,
   },
 ];
@@ -40,24 +40,31 @@ const COMPARISON = {
   ],
   obligor: [
     "One net obligation across both desks",
-    "Offsetting positions cancel cryptographically",
-    "Only the aggregate is ever decrypted",
+    "Offsetting positions net to one obligation",
+    "Only the aggregate is returned to the room",
     "$0.01 per call via x402",
   ],
 };
 
 const TICKER = [
   "Confidential netting",
-  "Arcium MPC",
-  "Attested TEE",
-  "Pyth oracles",
+  "MPC-ready",
+  "TEE-ready",
+  "Pyth live marks",
   "x402 settlement",
   "TEE ≠ MPC",
-  "Zero plaintext leaks",
+  "Plaintext stays local",
   "On-chain escrow",
 ];
 
-const INTEGRATIONS = ["Kamino", "Drift", "Pyth", "xStocks", "Arcium", "Monad"];
+const INTEGRATIONS = [
+  { name: "Kamino", status: "adapter-ready" },
+  { name: "Drift", status: "adapter-ready" },
+  { name: "Pyth", status: "live marks" },
+  { name: "xStocks", status: "planned" },
+  { name: "Arcium", status: "not wired" },
+  { name: "Monad", status: "testnet" },
+];
 
 export default function Home() {
   return (
@@ -84,8 +91,8 @@ export default function Home() {
               </h1>
 
               <p className="mt-6 max-w-md text-[17px] font-medium leading-[148%] tracking-[-0.02em] text-muted-foreground">
-                Obligor nets two desks&rsquo; portfolios into one confidential obligation —
-                neither party, nor the operator, ever sees the other&rsquo;s book.
+                Obligor nets two desks&rsquo; portfolios into one obligation — each desk&rsquo;s
+                book stays hidden from the other side, and only the aggregate result surfaces.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -105,9 +112,14 @@ export default function Home() {
               </div>
 
               <div className="mt-10 flex flex-wrap items-center gap-x-2 gap-y-2 text-[13px] font-medium tracking-[-0.01em] text-muted-foreground">
-                <span className="text-foreground">Backed by live rails:</span>
-                {INTEGRATIONS.map((name) => (
-                  <span key={name}>{name}</span>
+                <span className="font-semibold uppercase text-[11px] text-foreground">Rails:</span>
+                {INTEGRATIONS.map(({ name, status }) => (
+                  <span key={name} className="inline-flex items-center gap-1.5">
+                    {name}
+                    <span className="rounded-full border border-border bg-card px-2 py-0.5 font-mono text-[10px] normal-case text-muted-foreground">
+                      {status}
+                    </span>
+                  </span>
                 ))}
               </div>
             </div>

@@ -400,8 +400,8 @@ export default function ClearPage() {
               </span>
               <div className="inline-flex flex-wrap rounded-lg border border-border bg-secondary p-0.5">
                 {[
-                  { id: "arcium", label: "MPC — strongest (Solana)" },
-                  { id: "enclave", label: "Enclave TEE (Monad)" },
+                  { id: "arcium", label: "MPC target (Solana)" },
+                  { id: "enclave", label: "Enclave target (Monad)" },
                   { id: "simulated", label: "Local simulation" },
                 ].map((b) => (
                   <button
@@ -411,9 +411,9 @@ export default function ClearPage() {
                     aria-pressed={backend === b.id}
                     title={
                       b.id === "arcium"
-                        ? "Both books stay encrypted end-to-end. No one — not even Obligor — can read them."
+                        ? "Target: both books stay encrypted end-to-end, so no single operator — including Obligor — reads them. Until the MXE transport is wired this runs the exact formula as a labeled simulation."
                         : b.id === "enclave"
-                        ? "Books are sealed inside hardware-attested encryption. Same formula, different trust model."
+                        ? "Target: the books are sealed inside a hardware-attested enclave. This build runs the exact formula as a labeled simulation and never claims an unverified attestation."
                         : "Runs the exact same formula in your browser. Great for learning how netting works."
                     }
                     className={`rounded-md px-3 py-1 font-mono text-xs transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${

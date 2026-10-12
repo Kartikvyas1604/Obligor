@@ -6,22 +6,22 @@ import { ShieldCheck, Unlock, EyeOff, Cpu, ChevronLeft, ChevronRight } from "luc
 const STEPS = [
   {
     stepNumber: "01",
-    title: "Encrypted input submission",
-    badge: "Zero strategy leakage",
+    title: "Sealed input submission",
+    badge: "Books hidden per desk",
     icon: EyeOff,
     description:
-      "Desk A and Desk B submit their secret positions directly from their own devices. Each portfolio is encrypted client-side with independent keys.",
-    deskAData: "Long +$10,000,000 SOL (encrypted)",
-    deskBData: "Short -$10,000,000 SOL (encrypted)",
-    outcome: "Neither desk nor the server operator can see individual trades.",
+      "Desk A and Desk B submit their secret positions from their own devices. Neither desk ever sees the other's book. A wired MPC/TEE transport is the encrypted-submission target; this build seals each book against the counterparty in the room and API.",
+    deskAData: "Long +$10,000,000 SOL (sealed)",
+    deskBData: "Short -$10,000,000 SOL (sealed)",
+    outcome: "Neither desk ever sees the other's trades.",
   },
   {
     stepNumber: "02",
-    title: "Confidential enclave netting",
-    badge: "Hardware TEE / Arcium MPC",
+    title: "Confidential netting compute",
+    badge: "Sealed-execution simulation",
     icon: Cpu,
     description:
-      "The encrypted portfolios enter an isolated hardware TEE (Monad, AWS Nitro) or an MPC circuit (Solana, Arcium). Pyth oracles price the collateral and the bucket netting algorithm computes combined risk.",
+      "The sealed books enter the confidential core. Pyth live marks price the collateral and the bucket netting algorithm computes combined risk. Arcium MPC / hardware TEE is the verified wiring target — this build runs the exact formula as a labeled simulation, never as unclaimed cryptography.",
     deskAData: "Siloed risk: $3,000,000 margin",
     deskBData: "Siloed risk: $3,000,000 margin",
     outcome: "Offsetting positions cancel out. Combined net margin drops to $800,000.",
@@ -29,13 +29,13 @@ const STEPS = [
   {
     stepNumber: "03",
     title: "Bilateral escrow & cash unlock",
-    badge: "On-chain capital release",
+    badge: "Escrow envelope to Solana program",
     icon: Unlock,
     description:
-      "The enclave publishes a cryptographic attestation to the on-chain escrow contract. Both desks deposit only their reduced net margin, freeing the excess instantly.",
+      "The netting result conditions the escrow envelope, which stores the release split against the escrow contract program. In this deployment the envelope records intent and computes the release — the on-chain execution is the escrow program's job, never fabricated here.",
     deskAData: "New margin: $400,000 (saved $2.6M)",
     deskBData: "New margin: $400,000 (saved $2.6M)",
-    outcome: "$5,200,000 returns to the desks for deployment in yield strategies.",
+    outcome: "$5,200,000 computed as freed capital for release.",
   },
 ];
 
@@ -125,7 +125,7 @@ export function HowItWorksVisual() {
         <div className="space-y-4 rounded-2xl border border-border bg-background p-6 lg:col-span-7">
           <div className="flex items-center justify-between border-b border-border pb-3">
             <span className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
-              Live simulation stage
+              Simulation stage
             </span>
             <span className="font-mono text-xs text-foreground">{current.title}</span>
           </div>
@@ -162,7 +162,7 @@ export function HowItWorksVisual() {
                   Obligor confidential clearing core
                 </span>
                 <span className="font-mono text-[11px] text-muted-foreground">
-                  Zero plaintext leakage · Pyth Hermes oracle feeds
+                  Aggregate-only output · Pyth Hermes oracle feeds
                 </span>
               </div>
             </div>

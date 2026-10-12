@@ -42,7 +42,7 @@ export function StatsBand() {
             <Stat value={2} label="sealed parties per session" />
           </div>
           <div className="rounded-2xl bg-card">
-            <Stat value={8} label="max legs per encrypted book" />
+            <Stat value={8} label="max legs per sealed book" />
           </div>
           <div className="rounded-2xl bg-card">
             <Stat value={3} suffix="+" label="pairs cleared per Monad epoch" />
@@ -59,15 +59,15 @@ export function StatsBand() {
 const FAQS: Array<{ q: string; a: string }> = [
   {
     q: "Why does netting need confidential compute?",
-    a: "Netting one wallet's own positions is client-side math — a spreadsheet, not a product. Obligor exists for the harder case: two mutually distrusting desks who will only clear if neither, nor the operator, can read the other's book.",
+    a: "Netting one wallet's own positions is client-side math — a spreadsheet, not a product. Obligor exists for the harder case: two mutually distrusting desks who will only clear if neither side can see the other's book. Confidential compute (MPC or TEE) is the enforced version of that property once a transport is wired — this build demonstrates the exact formula under a labeled sealed-execution simulation.",
   },
   {
     q: "Why MPC on Solana but TEE on Monad?",
-    a: "We ship the strongest honest backend per chain. Arcium MXE gives cryptographic MPC on Solana. Monad gets hardware-attested TEE (Nitro/Oyster). Both are real confidentiality with different trust models — TEE is not MPC, and every screen labels which one ran.",
+    a: "Each chain gets its strongest honest backend. Arcium MXE is the cryptographic MPC target on Solana; Monad gets the hardware-attested TEE target (Nitro/Oyster). Until a transport is wired, the exact formula runs labeled as a sealed-execution simulation — never as unverified cryptography. TEE is not MPC, and every screen labels what actually ran.",
   },
   {
     q: "What does Obligor actually see?",
-    a: "Only the combined net margin. In confidential mode, per-leg plaintext never reaches the other party, the operator, or the logs. Adversarial plaintext views exist only as an explicitly labeled demo mode.",
+    a: "Only the combined net margin is returned to the room, and neither desk ever sees the other's book. Today the exact formula runs server-side under a labeled simulation; when an MPC/TEE transport is wired, even the operator stops seeing plaintext. Until then, nothing unverifiable is claimed.",
   },
   {
     q: "Is this a DEX, a lender, or a dark pool?",
@@ -174,11 +174,11 @@ export function CtaBand() {
             <CornerBrackets />
             <h2 className="mx-auto max-w-2xl text-[32px] font-medium leading-[122%] tracking-[-0.03em] sm:text-5xl">
               Clear both books.{" "}
-              <span className="text-muted-foreground">Leak neither.</span>
+              <span className="text-muted-foreground">Share only the net.</span>
             </h2>
             <p className="mx-auto mt-4 max-w-md text-[15px] font-medium leading-[148%] tracking-[-0.01em] text-muted-foreground">
-              Run the two-party demo, or hand your agents the x402 snippet — no account, no
-              plaintext books.
+              Run the two-party demo, or hand your agents the x402 snippet — no account, and the
+              other desk never sees your book.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
               <a

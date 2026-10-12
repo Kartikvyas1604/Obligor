@@ -134,8 +134,8 @@ export function BookColumn({
           <h3 className="text-sm font-medium text-foreground">{title}</h3>
         </div>
         <p className="mt-4 text-sm text-muted-foreground">
-          Sealed. This party&rsquo;s legs stay encrypted through the computation — that is the
-          whole point.
+          Sealed. This party&rsquo;s legs never reach the other side — only the aggregate netting
+          result surfaces. That is the whole point.
         </p>
         <div className="mt-4 space-y-2" aria-hidden>
           {[0, 1, 2].map((i) => (

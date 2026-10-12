@@ -30,29 +30,32 @@ export default function TrustPage() {
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
             Obligor&rsquo;s product claim is two-party confidentiality: both desks seal inputs, only
-            the combined net margin leaves the computation. This frontend demo runs that exact
-            formula in your browser on labeled fixtures — the confidential backends live in the
-            repo, not in this window.
+            the combined net margin leaves the computation. The exact formula is real and runs on
+            every path; the mutually-distrusting transports (MPC/TEE) are wired as labels-until-real
+            targets, and this page never upgrades a label it cannot verify.
           </p>
         </div>
 
         <section aria-label="Trust models" className="grid gap-6 md:grid-cols-2">
           <div className="rounded-lg border border-border bg-card p-6">
             <h2 className="font-mono text-xs uppercase tracking-widest text-primary">
-              Solana — cryptographic MPC
+              Solana — cryptographic MPC (target)
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              Arcium MXE computes the net over encrypted inputs. No single operator — including
-              Obligor — can read either book. This is the primary Colosseum path.
+              Arcium MXE is the planned transport: compute the net over encrypted inputs so no
+              single operator — including Obligor — reads either book. Until the MXE transport is
+              wired, the exact formula runs as a labeled sealed-execution simulation; nothing on
+              this site claims live MPC.
             </p>
           </div>
           <div className="rounded-lg border border-border bg-card p-6">
             <h2 className="font-mono text-xs uppercase tracking-widest text-steel">
-              Monad — hardware-attested TEE
+              Monad — hardware-attested TEE (target)
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              Nitro/Oyster enclave runs the identical formula with hardware attestation. Real
-              confidentiality, a different trust model: <strong className="text-foreground">TEE ≠ MPC</strong>,
+              The Rust enclave in <code className="font-mono text-foreground">enclave/obligor-enclave</code> is the
+              attested-transport skeleton; Nitro/Oyster is the attested target. A TEE is only claimed
+              when host verification matches the expected measurement — <strong className="text-foreground">TEE ≠ MPC</strong>,
               and nothing here pretends otherwise.
             </p>
           </div>

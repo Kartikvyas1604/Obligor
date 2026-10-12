@@ -14,7 +14,7 @@ export function SiteFooter() {
             <span className="text-lg font-medium tracking-[-0.02em]">Obligor</span>
           </Link>
           <p className="font-mono text-xs text-muted-foreground">
-            Two-party clearing · MPC on Solana · Attested TEE on Monad · x402 machine payments
+            Two-party clearing · MPC-ready on Solana · TEE-ready on Monad · x402 machine payments
           </p>
         </div>
 
@@ -22,8 +22,9 @@ export function SiteFooter() {
           <p className="max-w-3xl">
             Obligor is confidential clearing and portfolio margin analytics. Mock equity (
             <code className="font-mono text-foreground">tAAPL</code>) is fixture-driven and
-            adapter-ready for tokenized asset rails. Cryptographic MPC on Solana vs
-            hardware-attested TEE on Monad delivers honest, labeled confidentiality —{" "}
+            adapter-ready for tokenized asset rails. Today the exact formula runs in a sealed
+            simulation with honest labels — cryptographic MPC on Solana vs hardware-attested TEE
+            on Monad are the wired targets, and{" "}
             <strong className="text-foreground">TEE ≠ MPC</strong>. Analytics never custody funds.
           </p>
           <div className="flex shrink-0 gap-4 font-mono text-xs">
