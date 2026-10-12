@@ -5,6 +5,7 @@
  */
 
 import { buildOracleBook } from "./agent-utils";
+import { generatePayerKey, signObligorReceipt } from "../lib/x402";
 
 async function runAgentA() {
   const { API_BASE, solMark, bookA, bookB } = await buildOracleBook();
@@ -38,8 +39,20 @@ async function runAgentA() {
   console.log(`  Price     : $${challenge.x402?.priceUsd} (${challenge.x402?.baseUnits} base units)`);
   console.log(`  PayTo     : ${challenge.x402?.payTo}`);
 
-  console.log("\n→ Signing x402 payment with the agent's disposable key (spend-cap $0.01)...");
-  const paymentSig = `x402_sig_sol_${Date.now()}_agent_a`;
+  const c = challenge.x402;
+  if (!c?.scheme || !c.network || !c.asset || !c.payTo || !c.baseUnits) {
+    console.error("✖ 402 challenge is missing required x402 fields");
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log("\n→ Signing x402 payment with the agent's disposable ed25519 key (spend-cap $0.01)...");
+  const payer = generatePayerKey();
+  const paymentSig = signObligorReceipt(
+    { scheme: c.scheme, network: c.network, asset: c.asset, payTo: c.payTo, baseUnits: c.baseUnits },
+    payer,
+  );
+  console.log(`  Payer key : ${payer.signer} (ephemeral, real signature over the exact challenge terms)`);
 
   const paidRes = await fetch(`${API_BASE}/api/v1/net-margin`, {
     method: "POST",

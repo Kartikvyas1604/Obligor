@@ -12,7 +12,7 @@
  *     -H 'content-type: application/json' \
  *     -H "x-payment-signature: <printed header>" -d @book.json
  */
-import { generateKeyPairSync, sign as cryptoSign } from "node:crypto";
+import { generatePayerKey, signObligorReceipt } from "../lib/x402";
 
 async function main() {
   const API_BASE = process.env.API_BASE || process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000";
@@ -32,28 +32,11 @@ async function main() {
   const c = body.x402;
   if (!c) throw new Error("No x402 challenge in 402 response");
 
-  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
-  const rawPub = publicKey.export({ type: "spki", format: "der" }).subarray(12);
-
-  const receipt = {
-    v: "1",
-    scheme: c.scheme,
-    network: c.network,
-    asset: c.asset,
-    payTo: c.payTo,
-    amount: c.baseUnits,
-    nonce: `nonce_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
-  };
-  const message = [receipt.v, receipt.scheme, receipt.network, receipt.asset, receipt.payTo, receipt.amount, receipt.nonce].join("|");
-  const sig = cryptoSign(null, Buffer.from(message, "utf8"), privateKey);
-
-  const header = Buffer.from(
-    JSON.stringify({
-      ...receipt,
-      signer: Buffer.from(rawPub).toString("base64url"),
-      sig: Buffer.from(sig).toString("base64url"),
-    }),
-  ).toString("base64url");
+  const payer = generatePayerKey();
+  const header = signObligorReceipt(
+    { scheme: c.scheme, network: c.network, asset: c.asset, payTo: c.payTo, baseUnits: c.baseUnits },
+    payer,
+  );
 
   console.log("Signed x402 receipt for", `${c.network} (${c.baseUnits} base units → ${c.payTo})`);
   console.log("\nx-payment-signature:");

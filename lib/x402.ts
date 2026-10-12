@@ -17,7 +17,13 @@
  * follow-up; the on-chain facilitator path is advertised separately.
  */
 
-import { createPublicKey, verify as cryptoVerify } from "node:crypto";
+import {
+  createPublicKey,
+  generateKeyPairSync,
+  sign as cryptoSign,
+  verify as cryptoVerify,
+  type KeyObject,
+} from "node:crypto";
 import { env } from "./env";
 import type { Chain } from "./env";
 import { markOnce } from "./idempotency";
@@ -96,6 +102,48 @@ export function receiptMessage(
 
 export function encodeReceipt(r: ObligorReceipt): string {
   return Buffer.from(JSON.stringify(r)).toString("base64url");
+}
+
+export interface PayerKey {
+  /** base64url raw ed25519 public key (what a verifier sees as `signer`). */
+  signer: string;
+  privateKey: KeyObject;
+}
+
+/** Generate a fresh ephemeral ed25519 payer key (demo agents, CLIs). */
+export function generatePayerKey(): PayerKey {
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+  const der = publicKey.export({ type: "spki", format: "der" }) as Buffer;
+  const rawPub = der.subarray(ED25519_SPKI_PREFIX.length);
+  return { signer: Buffer.from(rawPub).toString("base64url"), privateKey };
+}
+
+/**
+ * Sign the exact challenge terms with a payer key and return the
+ * `x-payment-signature` header value. This is real ed25519 — the same receipt
+ * the server verifies, no format-check shortcut.
+ */
+export function signObligorReceipt(
+  challenge: Pick<PaymentChallenge, "scheme" | "network" | "asset" | "payTo" | "baseUnits">,
+  key: PayerKey,
+  amount?: string,
+): string {
+  const receipt = {
+    v: "1" as const,
+    scheme: challenge.scheme,
+    network: challenge.network,
+    asset: challenge.asset,
+    payTo: challenge.payTo,
+    amount: amount ?? challenge.baseUnits,
+    nonce: `nonce_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
+  };
+  const sig = cryptoSign(null, Buffer.from(receiptMessage(receipt), "utf8"), key.privateKey);
+  const full: ObligorReceipt = {
+    ...receipt,
+    signer: key.signer,
+    sig: Buffer.from(sig).toString("base64url"),
+  };
+  return encodeReceipt(full);
 }
 
 function decodeReceipt(header: string): ObligorReceipt | null {

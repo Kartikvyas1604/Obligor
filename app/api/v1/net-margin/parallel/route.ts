@@ -143,7 +143,7 @@ export const POST = withApi(async ({ req }) => {
     executionDurationMs,
     pairs,
     attestation: attestation
-      ? { ...attestation, note: "Attestation metadata reported by the enclave backend. On this deployment the enclave runs in sealed-execution simulation — treat as TEE-shaped, not yet hardware-attested." }
+      ? { ...attestation, note: "Host-verified hardware attestation: the enclave's measurement matched the configured allowlist (ENCLAVE_EXPECTED_MEASUREMENT)." }
       : null,
     differentiator:
       "Parallel multi-pair clearing: Monad throughput nets N desk pairs concurrently per epoch. TEE ≠ MPC — trust model labeled honestly.",

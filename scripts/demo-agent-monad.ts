@@ -6,6 +6,36 @@
  */
 
 import { buildOracleBook, demoWallet } from "./agent-utils";
+import { generatePayerKey, signObligorReceipt } from "../lib/x402";
+
+async function payForEpoch(
+  API_BASE: string,
+  body: Record<string, unknown>,
+): Promise<{ demoPayment: boolean; paymentSig: string | null }> {
+  const initial = await fetch(`${API_BASE}/api/v1/net-margin/parallel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (initial.status === 402) {
+    const c = ((await initial.json()) as { x402?: { scheme?: string; network?: string; asset?: string; baseUnits?: string; payTo?: string } }).x402;
+    if (!c?.scheme || !c.network || !c.asset || !c.payTo || !c.baseUnits) {
+      throw new Error("402 challenge is missing required x402 fields");
+    }
+    const payer = generatePayerKey();
+    const paymentSig = signObligorReceipt(
+      { scheme: c.scheme, network: c.network, asset: c.asset, payTo: c.payTo, baseUnits: c.baseUnits },
+      payer,
+    );
+    console.log(`  Paid via real ed25519 receipt (payer ${payer.signer.slice(0, 12)}…)`);
+    return { demoPayment: false, paymentSig };
+  }
+  if (initial.status === 503) {
+    console.log("  Monad x402 not configured — using the labeled demo escape hatch (DEMO_ALLOW_UNPAID)");
+    return { demoPayment: true, paymentSig: null };
+  }
+  throw new Error(`Unexpected prelim status ${initial.status}`);
+}
 
 async function runMonadAgent() {
   const { API_BASE, bookA, bookB } = await buildOracleBook();
@@ -21,11 +51,18 @@ async function runMonadAgent() {
     b: { wallet: n === 1 ? bookB.wallet : demoWallet(), legs: bookB.legs },
   }));
 
+  const epochBody: Record<string, unknown> = { chain: "monad", pairs };
   console.log(`→ Submitting ${pairs.length} desk pairs to the Monad clearing epoch...`);
+  const { demoPayment, paymentSig } = await payForEpoch(API_BASE, epochBody);
+  if (demoPayment) epochBody.demoPayment = true;
+
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (paymentSig) headers["x-payment-signature"] = paymentSig;
+
   const res = await fetch(`${API_BASE}/api/v1/net-margin/parallel`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chain: "monad", pairs }),
+    headers,
+    body: JSON.stringify(epochBody),
   });
 
   if (!res.ok) {
