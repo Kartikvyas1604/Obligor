@@ -6,13 +6,15 @@ import { Users, ArrowRight } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { WalletConnect } from "@/components/wallet-connect";
 import { setPartyTokens } from "@/lib/client-party-tokens";
+import { useChain } from "@/lib/chain-context";
 import { type BackendKind } from "@/lib/margin";
 
 export default function DealLauncherPage() {
   const router = useRouter();
+  const { chain } = useChain();
   const [wallet, setWallet] = useState<string>("");
   const [label, setLabel] = useState<string>("");
-  const [backend, setBackend] = useState<BackendKind>("arcium");
+  const [backend, setBackend] = useState<BackendKind>(() => (chain === "monad" ? "enclave" : "arcium"));
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

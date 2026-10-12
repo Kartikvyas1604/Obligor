@@ -7,6 +7,7 @@ import { ArrowUpRight, Menu, X } from "lucide-react";
 import { LogoMark } from "@/components/logo-mark";
 import { NavLinks } from "@/components/nav-links";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ChainToggle } from "@/components/chain-toggle";
 
 const LINKS = [
   { href: "/clear", label: "Clear" },
@@ -58,6 +59,7 @@ export function SiteHeader() {
         </div>
 
         <div className="flex items-center gap-2">
+          <ChainToggle className="hidden sm:inline-flex" />
           <ThemeToggle />
           <Link
             href="/clear"
@@ -89,6 +91,9 @@ export function SiteHeader() {
           className="anim-fade-up border-t border-border bg-background md:hidden"
         >
           <div className="flex flex-col gap-1 px-4 py-4">
+            <div className="px-1 pb-2">
+              <ChainToggle />
+            </div>
             {LINKS.map(({ href, label }) => {
               const active = pathname === href || pathname.startsWith(`${href}/`);
               return (

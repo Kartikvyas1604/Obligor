@@ -22,6 +22,7 @@ import { VerifyResultChip } from "@/components/verify-chip";
 import { ThreePartyCard } from "@/components/three-party-card";
 import { type BackendKind, type NettingPartyId, type PositionBook, type PositionLeg, type PartyId } from "@/lib/margin";
 import { getConfidentialBackend } from "@/lib/confidential";
+import { useChain } from "@/lib/chain-context";
 
 const STAGES_SOLANA = [
   "Sealing Party A legs",
@@ -81,7 +82,8 @@ function resign(leg: PositionLeg, party: NettingPartyId): PositionLeg {
 }
 
 export default function ClearPage() {
-  const [backend, setBackend] = useState<BackendKind>("arcium");
+  const { chain } = useChain();
+  const [backend, setBackend] = useState<BackendKind>(() => (chain === "monad" ? "enclave" : "arcium"));
   const [stage, setStage] = useState<number>(-1);
   const [phase, setPhase] = useState<"setup" | "computing" | "done" | "error">("setup");
   const [computeError, setComputeError] = useState<string | null>(null);
