@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Obligor — Confidential Two-Party Clearing",
   description:
-    "Two desks. One net initial margin. Neither party sees the other's book. Confidential clearing via Arcium MPC on Solana and attested TEEs on Monad.",
+    "Two desks. One net initial margin. Neither party sees the other's book. Confidential clearing with Arcium MPC on Solana and attested TEEs on Monad wired as labeled, verified-only targets.",
 };
 
 export const viewport: Viewport = {

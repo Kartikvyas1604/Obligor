@@ -94,8 +94,8 @@ function AgentTerminal({
           setLines((prev) => [
             ...prev,
             { text: `← 402 PAYMENT-REQUIRED (Price: $${ch.x402?.priceUsd || "0.01"})`, cls: "t-err" },
-            { text: `→ Signing x402 payment authorization with agent key...`, cls: "t-muted" },
-            { text: `→ Submitting with PAYMENT-SIGNATURE: x402_sig_${Date.now()}`, cls: "t-muted" },
+            { text: `→ No browser key here — sending a labeled demo signature`, cls: "t-muted" },
+            { text: `→ Submitting with x-payment-signature: demo_sig_${Date.now()}`, cls: "t-muted" },
           ]);
 
           // Step 2: Paid call
@@ -408,8 +408,9 @@ export default function AgentsPage() {
             Let agents clear for you
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Obligor&rsquo;s clearing API is machine-payable: two independent agents call it with
-            their own disposable keys and pay $0.01 per call. No accounts, no API keys.
+            Obligor&rsquo;s clearing API is machine-payable: two independent agents call it and pay
+            $0.01 per call through the x402 flow — real ed25519 signing ships in the agent scripts,
+            and the browser demo labels its synthetic signature. No accounts, no API keys.
           </p>
         </div>
 
@@ -424,12 +425,12 @@ export default function AgentsPage() {
               {
                 n: "1",
                 title: "Agent asks for a quote",
-                body: "The API answers with a bill: $0.01, payable on devnet USDC. Nothing leaks — not yet, not ever.",
+                body: "The API answers with a bill: $0.01, payable on devnet USDC. Nothing is returned to the counterparty — not yet, not ever.",
               },
               {
                 n: "2",
                 title: "Agent signs the payment",
-                body: "The agent's disposable key signs a micropayment — one individual transaction, capped at $0.01.",
+                body: "The shipped agent scripts sign with a real disposable ed25519 key (scripts/sign-x402-receipt.ts). In this browser demo the signature is explicitly labeled demo_sig_…",
               },
               {
                 n: "3",
@@ -468,7 +469,8 @@ export default function AgentsPage() {
         <div className="mt-2">
           <h2 className="text-xl font-medium tracking-tight">Monad multi-pair epoch agent</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Clears three desk pairs simultaneously under hardware-attested encryption (TEE).
+            Clears three desk pairs simultaneously through the parallel multi-pair route. The TEE
+            backend is a labeled target — an attestation is claimed only when host-verified.
           </p>
           <div className="mt-4">
             <AgentTerminal

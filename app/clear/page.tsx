@@ -552,10 +552,10 @@ export default function ClearPage() {
             <div className="flex items-center justify-between">
               <p className="flex items-center gap-2 text-sm font-bold text-foreground">
                 <Lock className="h-4 w-4 text-foreground" aria-hidden />
-                Working in the dark — neither book is readable
+                Working in the dark — no book is shared between desks
               </p>
               <span className="rounded-full border border-border bg-secondary px-3 py-1 font-mono text-xs uppercase text-foreground">
-                {backend === "arcium" ? "MPC circuit" : backend === "enclave" ? "Enclave TEE" : "Local simulation"}
+                {backend === "arcium" ? "MPC target" : backend === "enclave" ? "TEE target" : "Local simulation"}
               </span>
             </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-secondary" aria-hidden>
