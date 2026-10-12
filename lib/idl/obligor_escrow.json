@@ -1,0 +1,297 @@
+{
+  "address": "94YmMnGjq2U8zpsLMSuk9fMwnfcHqrft3CtmwuZidMkZ",
+  "metadata": {
+    "name": "obligor_escrow",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Obligor bilateral margin escrow — locks desk collateral and releases excess on a verified netting result"
+  },
+  "instructions": [
+    {
+      "name": "initialize_escrow",
+      "docs": [
+        "Initializes a bilateral margin escrow between Party A and Party B"
+      ],
+      "discriminator": [
+        243,
+        160,
+        77,
+        153,
+        11,
+        92,
+        48,
+        209
+      ],
+      "accounts": [
+        {
+          "name": "escrow_account",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "party_a",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "party_b",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "party_a_token",
+          "writable": true
+        },
+        {
+          "name": "party_b_token",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "party_a_amount",
+          "type": "u64"
+        },
+        {
+          "name": "party_b_amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "settle_and_release_excess",
+      "docs": [
+        "Settles net margin based on verified Obligor confidential computation result"
+      ],
+      "discriminator": [
+        87,
+        255,
+        87,
+        208,
+        7,
+        134,
+        185,
+        9
+      ],
+      "accounts": [
+        {
+          "name": "escrow_account",
+          "writable": true
+        },
+        {
+          "name": "clearing_authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "netted_margin_usd",
+          "type": "u64"
+        },
+        {
+          "name": "computation_proof_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "EscrowAccount",
+      "discriminator": [
+        36,
+        69,
+        48,
+        18,
+        128,
+        225,
+        125,
+        135
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "EscrowInitializedEvent",
+      "discriminator": [
+        17,
+        220,
+        22,
+        132,
+        33,
+        81,
+        105,
+        59
+      ]
+    },
+    {
+      "name": "MarginSettledAndReleasedEvent",
+      "discriminator": [
+        168,
+        113,
+        227,
+        55,
+        19,
+        177,
+        190,
+        174
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidStatus",
+      "msg": "Invalid escrow status for this operation."
+    },
+    {
+      "code": 6001,
+      "name": "InvalidNettedMargin",
+      "msg": "Netted margin must be lower than total locked siloed margin."
+    }
+  ],
+  "types": [
+    {
+      "name": "EscrowAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "party_a",
+            "type": "pubkey"
+          },
+          {
+            "name": "party_b",
+            "type": "pubkey"
+          },
+          {
+            "name": "party_a_siloed_im",
+            "type": "u64"
+          },
+          {
+            "name": "party_b_siloed_im",
+            "type": "u64"
+          },
+          {
+            "name": "total_locked_usd",
+            "type": "u64"
+          },
+          {
+            "name": "freed_capital_usd",
+            "type": "u64"
+          },
+          {
+            "name": "proof_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "EscrowStatus"
+              }
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowInitializedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "escrow",
+            "type": "pubkey"
+          },
+          {
+            "name": "party_a",
+            "type": "pubkey"
+          },
+          {
+            "name": "party_b",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_locked_usd",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Initialized"
+          },
+          {
+            "name": "Deposited"
+          },
+          {
+            "name": "Settled"
+          },
+          {
+            "name": "Liquidated"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarginSettledAndReleasedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "escrow",
+            "type": "pubkey"
+          },
+          {
+            "name": "netted_margin_usd",
+            "type": "u64"
+          },
+          {
+            "name": "freed_capital_usd",
+            "type": "u64"
+          },
+          {
+            "name": "released_to_a",
+            "type": "u64"
+          },
+          {
+            "name": "released_to_b",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}

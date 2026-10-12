@@ -141,6 +141,22 @@ const envSchema = z.object({
       .default("https://data.api.drift.trade"),
     subAccountCacheMs: positiveInt(30_000),
   }),
+
+  escrow: z.object({
+    // When true, POST /v1/escrow/settle emits a REAL on-chain settlement against
+    // the deployed obligor-escrow program and returns its transaction signature.
+    // Requires rpcUrl + a funded authority keypair + a live escrow account.
+    // Any failure fails closed — the API never fabricates a signature.
+    realSettle: boolish(false),
+    rpcUrl: z.string().optional().default("http://127.0.0.1:8899"),
+    programId: z
+      .string()
+      .optional()
+      .default("94YmMnGjq2U8zpsLMSuk9fMwnfcHqrft3CtmwuZidMkZ"),
+    // Path to a Solana CLI JSON keypair file for the clearing authority.
+    authorityKeypair: z.string().optional().default(""),
+    commitment: z.enum(["processed", "confirmed", "finalized"]).optional().default("confirmed"),
+  }),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -199,6 +215,13 @@ function load(): Env {
       subAccountId: process.env.DRIFT_SUBACCOUNT_ID,
       dataApiBase: process.env.DRIFT_DATA_API_BASE,
       subAccountCacheMs: process.env.DRIFT_SUBACCOUNT_CACHE_MS,
+    },
+    escrow: {
+      realSettle: process.env.ESCROW_REAL_SETTLE,
+      rpcUrl: process.env.SOLANA_RPC_URL,
+      programId: process.env.ESCROW_PROGRAM_ID,
+      authorityKeypair: process.env.SOLANA_AUTHORITY_KEYPAIR,
+      commitment: process.env.SOLANA_COMMITMENT,
     },
   });
 

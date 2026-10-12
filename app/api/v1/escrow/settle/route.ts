@@ -8,6 +8,7 @@ import {
   recordIdempotent,
   replayIdempotent,
 } from "@/lib/idempotency";
+import { emitSettlement, escrowOnchainEnabled, type SettlementTx } from "@/lib/escrow-onchain";
 
 const bodySchema = z.object({
   escrowId: z.string().trim().min(4).max(64),
@@ -19,6 +20,8 @@ const bodySchema = z.object({
   proofHash: z.string().trim().min(8).max(128),
   partyALockedUsd: z.number().nonnegative(),
   partyBLockedUsd: z.number().nonnegative(),
+  /** On-chain escrow account (base58). Required when ESCROW_REAL_SETTLE=true. */
+  escrowAccount: z.string().trim().min(32).max(64).optional(),
 });
 
 /**
@@ -72,21 +75,53 @@ export const POST = withApi(async ({ req }) => {
     splitTotal > 0 ? Math.round((freedCapital * body.partyALockedUsd) / splitTotal * 100) / 100 : 0;
   const releasedToB = Math.round((freedCapital - releasedToA) * 100) / 100;
 
+  // Real on-chain settlement when enabled. Failures throw (502) and nothing is
+  // recorded — the API never fabricates a transaction signature.
+  let onchain: SettlementTx | null = null;
+  if (escrowOnchainEnabled()) {
+    if (body.chain !== "solana") {
+      throw ApiError.badRequest("Real settlement is Solana-only", { chain: body.chain });
+    }
+    if (!body.escrowAccount) {
+      throw ApiError.badRequest(
+        "escrowAccount (base58) is required when ESCROW_REAL_SETTLE is enabled",
+      );
+    }
+    try {
+      onchain = await emitSettlement({
+        escrowAccount: body.escrowAccount,
+        nettedMarginUsd: body.nettedMarginUsd,
+        proofHash: body.proofHash,
+      });
+    } catch (err) {
+      throw new ApiError(
+        502,
+        "ESCROW_SETTLE_FAILED",
+        `On-chain settlement failed and was NOT recorded: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   const result = {
     ok: true,
     escrowId: body.escrowId,
     chain: body.chain,
-    status: "settlement_computed",
+    status: onchain ? "settled_onchain" : "settlement_computed",
     proofHash: body.proofHash,
     totalLockedUsd: body.totalLockedUsd,
     nettedMarginUsd: body.nettedMarginUsd,
     freedCapitalUsd: freedCapital,
     releasedToPartyAUsd: releasedToA,
     releasedToPartyBUsd: releasedToB,
+    /** Real transaction signature when on-chain settlement ran; null otherwise. */
+    transactionSignature: onchain?.signature ?? null,
+    transactionSlot: onchain?.slot ?? null,
+    explorerUrl: onchain?.explorerUrl ?? null,
     idempotencyKey: idempotencyKey ?? null,
     timestamp: new Date().toISOString(),
-    message:
-      "Release computed from the verified netting result. On-chain transfer executes in the escrow contract repo; this envelope carries no fabricated transaction hash.",
+    message: onchain
+      ? "Settled on-chain against the obligor-escrow program; the transaction signature above is the real, verifiable release."
+      : "Release computed from the verified netting result. On-chain transfer executes in the escrow contract repo; this envelope carries no fabricated transaction hash.",
   };
 
   if (idempotencyKey) {

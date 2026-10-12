@@ -1,0 +1,19 @@
+[toolchain]
+anchor_version = "1.1.2"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+obligor_escrow = "94YmMnGjq2U8zpsLMSuk9fMwnfcHqrft3CtmwuZidMkZ"
+
+[programs.devnet]
+obligor_escrow = "94YmMnGjq2U8zpsLMSuk9fMwnfcHqrft3CtmwuZidMkZ"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"

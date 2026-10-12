@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
-declare_id!("EscrowObL1gorC1ear1ng1111111111111111111111");
+declare_id!("94YmMnGjq2U8zpsLMSuk9fMwnfcHqrft3CtmwuZidMkZ");
 
 #[program]
 pub mod obligor_escrow {

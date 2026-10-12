@@ -35,6 +35,9 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
+  // Solana client libs are Node-only and use optional/require internals; keep
+  // them out of the bundler so the escrow settle path loads them natively.
+  serverExternalPackages: ["@solana/web3.js", "@solana/spl-token"],
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
