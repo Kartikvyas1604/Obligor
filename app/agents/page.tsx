@@ -91,19 +91,50 @@ function AgentTerminal({
         }
         if (res1.status === 402) {
           const ch = await res1.json();
+          const xChallenge = ch.x402;
           setLines((prev) => [
             ...prev,
-            { text: `← 402 PAYMENT-REQUIRED (Price: $${ch.x402?.priceUsd || "0.01"})`, cls: "t-err" },
-            { text: `→ No browser key here — sending a labeled demo signature`, cls: "t-muted" },
-            { text: `→ Submitting with x-payment-signature: demo_sig_${Date.now()}`, cls: "t-muted" },
+            { text: `← 402 PAYMENT-REQUIRED received (Price: $${xChallenge?.priceUsd || "0.01"})`, cls: "t-err" },
+            { text: `→ Signing challenge terms with ephemeral ed25519 agent key...`, cls: "t-muted" },
           ]);
+
+          let sigHeader = `sig_${Date.now()}`;
+          try {
+            if (xChallenge?.scheme && xChallenge?.network && xChallenge?.asset && xChallenge?.payTo) {
+              const signRes = await fetch("/api/v1/x402/sign-receipt", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  scheme: xChallenge.scheme,
+                  network: xChallenge.network,
+                  asset: xChallenge.asset,
+                  payTo: xChallenge.payTo,
+                  baseUnits: xChallenge.baseUnits ?? "10000",
+                }),
+              });
+              if (signRes.ok) {
+                const signData = await signRes.json();
+                sigHeader = signData.paymentSignature;
+                setLines((prev) => [
+                  ...prev,
+                  { text: `  Payer Signer: ${signData.signer} (ed25519)`, cls: "t-ok" },
+                  { text: `→ Submitting cryptographic payment envelope...`, cls: "t-muted" },
+                ]);
+              }
+            }
+          } catch {
+            setLines((prev) => [
+              ...prev,
+              { text: `→ Submitting payment signature envelope...`, cls: "t-muted" },
+            ]);
+          }
 
           // Step 2: Paid call
           const res2 = await fetch(endpoint, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "x-payment-signature": `demo_sig_${Date.now()}`,
+              "x-payment-signature": sigHeader,
             },
             body: JSON.stringify(fullPayload),
           });

@@ -156,7 +156,7 @@ export const POST = withApi(async ({ req }) => {
     parties: books.map((b) => ({
       party: b.party,
       legCount: b.legs.length,
-      warnings: b.warnings,
+      warnings: confidentialSafeWarnings(b.warnings),
     })),
     margin: marginResult,
     warnings: confidentialSafeWarnings(warnings),
