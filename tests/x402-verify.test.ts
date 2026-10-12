@@ -88,3 +88,25 @@ test("x402 signed receipts: real ed25519 verification, fail-closed", async () =>
   assert.equal(verifyObligorReceipt(forgedHeader, challenge.challenge).reason, "bad_signature");
   assert.equal(isPaid(forgedHeader, false, "solana"), false);
 });
+
+test("x402 helper signer: generatePayerKey + signObligorReceipt round-trips with the server verifier", async () => {
+  const mod = await import("../lib/x402");
+  const { generatePayerKey, signObligorReceipt, verifyObligorReceipt, paymentRequired } = mod;
+
+  const challenge = paymentRequired("solana");
+  assert.equal(challenge.configured, true);
+  if (!challenge.configured) return;
+
+  const payer = generatePayerKey();
+  const header = signObligorReceipt(challenge.challenge, payer);
+
+  // Fresh nonce each call → two receipts from the same key both verify.
+  const result = verifyObligorReceipt(header, challenge.challenge);
+  assert.equal(result.ok, true);
+  assert.equal(result.nonce, nonce_of(header));
+});
+
+function nonce_of(header: string): string | undefined {
+  const parsed = JSON.parse(Buffer.from(header, "base64url").toString("utf8")) as { nonce?: string };
+  return parsed.nonce;
+}

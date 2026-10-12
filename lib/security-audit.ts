@@ -10,6 +10,9 @@
  *   fail — the invariant is violated here; the verdict collapses to "review"
  */
 
+import { execSync } from "node:child_process";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { env, isProduction } from "./env";
 import { registryStoresLegs } from "./computation-registry";
 
@@ -30,6 +33,105 @@ export interface SecurityAudit {
   checks: AuditCheck[];
   verdict: "pass" | "review";
   disclaimer: string;
+}
+
+// ---------------------------------------------------------------------------
+// Real credential-hygiene scan (check 8). Runs over git-tracked files only:
+// the invariant is "nothing secret is committed", not "nothing secret exists
+// in the working tree" (regenerable build artifacts stay on disk, git-ignored).
+// ---------------------------------------------------------------------------
+
+const REPO_ROOT = process.cwd();
+
+const SKIP_DIRS = new Set([
+  "node_modules",
+  ".next",
+  ".git",
+  "target",
+  ".data",
+  "build",
+  "dist",
+  ".turbo",
+  "coverage",
+]);
+
+function walkFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory() && entry.name.startsWith(".")) continue;
+    const p = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (SKIP_DIRS.has(entry.name)) continue;
+      out.push(...walkFiles(p));
+    } else {
+      out.push(p);
+    }
+  }
+  return out;
+}
+
+function trackedFiles(): string[] {
+  try {
+    const out = execSync("git ls-files", {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+      maxBuffer: 8 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const files = out.split("\n").map((s) => s.trim()).filter(Boolean);
+    if (files.length > 0) return files;
+  } catch {
+    // git unavailable (e.g. deployed from an image without .git) — fall back
+    // to a full working-tree walk. The detail line names this mode.
+  }
+  return walkFiles(REPO_ROOT).map((p) => p.slice(REPO_ROOT.length + 1));
+}
+
+/** Solana keypair files are raw JSON arrays of exactly 64 bytes (0..255). */
+function isSolanaKeypair(buf: Buffer): boolean {
+  if (buf.length === 0 || buf.length > 2048) return false;
+  try {
+    const arr = JSON.parse(buf.toString("utf8")) as unknown;
+    return (
+      Array.isArray(arr) &&
+      arr.length === 64 &&
+      arr.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function scanTrackedForSecrets(): { offenders: string[]; viaGit: boolean } {
+  const offenders: string[] = [];
+  const files = trackedFiles();
+  let viaGit = true;
+  try {
+    execSync("git rev-parse --is-inside-work-tree", { cwd: REPO_ROOT, stdio: "ignore" });
+  } catch {
+    viaGit = false;
+  }
+  for (const rel of files) {
+    const abs = join(REPO_ROOT, rel);
+    try {
+      const st = statSync(abs);
+      if (!st.isFile() || st.size > 512 * 1024) continue;
+      const buf = readFileSync(abs);
+      const text = buf.toString("utf8");
+      if (/-----BEGIN (?:RSA |EC |EC PRIVATE|OPENSSH |ENCRYPTED )?PRIVATE KEY-----/.test(text)) {
+        offenders.push(`${rel} (PEM private key block)`);
+      }
+      if (/-----BEGIN [A-Z -]*(?:SEED[ -]?PHRASE|MNEMONIC)[A-Z -]*-----/i.test(text)) {
+        offenders.push(`${rel} (seed phrase / mnemonic block)`);
+      }
+      if (isSolanaKeypair(buf)) {
+        offenders.push(`${rel} (Solana JSON keypair — 64-byte secret array)`);
+      }
+    } catch {
+      // unreadable or already deleted — not a committed secret
+    }
+  }
+  return { offenders, viaGit };
 }
 
 export function buildSecurityAudit(): SecurityAudit {
@@ -127,14 +229,18 @@ export function buildSecurityAudit(): SecurityAudit {
     evidence: "next.config.ts · Content-Security-Policy",
   });
 
-  // 8. Credential hygiene: repo scan for private keys / seed phrases.
+  // 8. Credential hygiene: live scan of git-tracked files for private keys /
+  //    seed phrases. Not a hardcoded pass — runs at audit build time.
+  const { offenders, viaGit } = scanTrackedForSecrets();
   push({
     id: "seedless_repo",
     title: "No private keys or seed phrases are committed",
-    status: "pass",
+    status: offenders.length === 0 ? "pass" : "fail",
     detail:
-      "Scan of the working tree finds no PEM private keys, no base58 key material, no mnemonic literals. .env is git-ignored; .env.example is the committed template.",
-    evidence: "repo scan at audit build time",
+      offenders.length === 0
+        ? `Git-tracked files contain no PEM private keys, no Solana JSON keypairs, no seed-phrase blocks. .env is git-ignored; .env.example is the committed template. Scanned ${viaGit ? "git-tracked files" : "working tree (git unavailable)"}.`
+        : `Tracked secrets found: ${offenders.join("; ")}. Remove them with 'git rm --cached', then rotate the exposed material. .env is git-ignored; .env.example is the committed template.`,
+    evidence: "live repo scan · lib/security-audit.ts · scanTrackedForSecrets",
   });
 
   const status = worst();

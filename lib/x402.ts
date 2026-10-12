@@ -124,7 +124,7 @@ export function generatePayerKey(): PayerKey {
  * the server verifies, no format-check shortcut.
  */
 export function signObligorReceipt(
-  challenge: Pick<PaymentChallenge, "scheme" | "network" | "asset" | "payTo" | "baseUnits">,
+  challenge: { scheme: string; network: string; asset: string; payTo: string; baseUnits: string },
   key: PayerKey,
   amount?: string,
 ): string {
