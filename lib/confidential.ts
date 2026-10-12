@@ -3,20 +3,21 @@
  *
  * HONESTY CONTRACT (docs/AGENT.md §13):
  * - The formula (`twoPartyNetted`) is the single source of truth.
- * - `ArciumBackend` and `EnclaveBackend` carry REAL CIRCUIT/ENCLAVE code in
- *   `programs/` and `enclave/` respectively. Until the compiled transports
- *   are wired behind `CONFIDENTIAL_REAL_TRANSPORTS`, both run the identical
- *   formula as *sealed-execution simulation* and say so: trustModel stays
- *   `simulated_plaintext_compute`, trust-model labels are never claimed,
- *   and no attestation is ever fabricated.
- * - With `CONFIDENTIAL_REAL_TRANSPORTS=true`, the real transport URL is
- *   required — a missing wire FAILS CLOSED (503-shaped error) instead of
- *   silently falling back to plaintext simulation.
- * - The enclave transport (ENCLAVE_ENDPOINT + `enclave/obligor-enclave`) is a
- *   real HTTP wire: the enclave computes the numbers and Node consumes them.
- *   `hardware_attested_tee` is claimed ONLY when the enclave returns a verified
- *   hardware quote; an un-attested enclave process reports
- *   `simulated_plaintext_compute` with a note (never a fabricated attestation).
+ * - `ArciumBackend` carries the real Arcis circuit in `mxe/`, but the Arcium
+ *   MXE encryption lifecycle is NOT wired in this build. It therefore ALWAYS
+ *   runs the identical formula as *sealed-execution simulation* and reports
+ *   `simulated_plaintext_compute`. With `CONFIDENTIAL_REAL_TRANSPORTS=true` it
+ *   FAILS CLOSED rather than pretending a plaintext POST is cryptographic MPC —
+ *   `cryptographic_mpc` is never returned.
+ * - `EnclaveBackend` carries the real Rust enclave in `enclave/`. With
+ *   `CONFIDENTIAL_REAL_TRANSPORTS=true` and `ENCLAVE_ENDPOINT` set it runs the
+ *   formula over that real HTTP wire. `hardware_attested_tee` is claimed ONLY
+ *   when the enclave returns a verified hardware quote; an un-attested run
+ *   reports `simulated_plaintext_compute` with a note (never a fabricated
+ *   attestation). A missing wire FAILS CLOSED, and with
+ *   `ENCLAVE_QUOTE_REQUIRED=true` an un-attested run fails closed too.
+ * - Both `trustModel` getters report the conservative label from config alone;
+ *   a trust claim is only ever attached to a per-run verified result.
  */
 
 import {
@@ -26,6 +27,7 @@ import {
   twoPartyNetted,
 } from "./margin";
 import { makeLogger } from "./logger";
+import { env } from "./env";
 
 const log = makeLogger("confidential");
 
@@ -127,73 +129,48 @@ export class ConfidentialUnavailableError extends Error {
   }
 }
 
-const realTransports = (() => {
-  const flag = String(process.env.CONFIDENTIAL_REAL_TRANSPORTS ?? "").toLowerCase();
-  return ["1", "true", "yes", "on"].includes(flag);
-})();
+const realTransports = env.confidential.realTransports;
+const ENCLAVE_ENDPOINT = env.confidential.enclaveEndpoint;
 
-const ARCIUM_MXE_ENDPOINT = process.env.ARCIUM_MXE_ENDPOINT ?? "";
-const ENCLAVE_ENDPOINT = process.env.ENCLAVE_ENDPOINT ?? "";
-
-function checkTransport(kind: "arcium" | "enclave") {
-  if (!realTransports) return;
-  if (kind === "arcium" && !ARCIUM_MXE_ENDPOINT) throw new ConfidentialUnavailableError("arcium-mxe");
-  if (kind === "enclave" && !ENCLAVE_ENDPOINT) throw new ConfidentialUnavailableError("enclave");
+function checkEnclaveTransport() {
+  if (realTransports && !ENCLAVE_ENDPOINT) throw new ConfidentialUnavailableError("enclave");
 }
 
 /**
  * ArciumBackend (Solana).
  *
- * The Arcis circuit `two_party_portfolio_net` in
- * `mxe/encrypted-ixs/` is the real MPC program. Until the
- * compiled MXE transport is wired (`ARCIUM_MXE_ENDPOINT` + real
- * `@arcium-hq/client` encryption lifecycle), this executes the identical
- * formula as sealed-execution simulation and labels it honestly.
+ * The Arcis circuit `two_party_portfolio_net` in `mxe/encrypted-ixs/` is the
+ * real MPC program, but the Arcium MXE encryption lifecycle (`@arcium-hq/client`
+ * encrypt → submit → await callback → decrypt) is NOT wired in this build.
+ *
+ * We therefore NEVER claim cryptographic MPC. Two honest modes:
+ * - default: run the identical formula as sealed-execution simulation and label
+ *   it `simulated_plaintext_compute`;
+ * - `CONFIDENTIAL_REAL_TRANSPORTS=true`: FAIL CLOSED, because we cannot provide
+ *   the real transport the operator demanded. We do not POST plaintext buckets
+ *   to an endpoint and call the result MPC.
  */
 export class ArciumBackend implements ConfidentialBackend {
   readonly kind: BackendKind = "arcium";
 
   get trustModel(): TrustModel {
-    return realTransports ? "cryptographic_mpc" : "simulated_plaintext_compute";
+    // Config alone can never establish a cryptographic claim.
+    return "simulated_plaintext_compute";
   }
 
   async netTwoParty(
     bookA: PositionBook,
     bookB: PositionBook,
   ): Promise<ConfidentialNetMarginResult> {
-    checkTransport("arcium");
+    if (realTransports) {
+      // The real Arcium MXE lifecycle is not implemented in this build, so we
+      // cannot honour a demand for real transports — fail closed and loud.
+      throw new ConfidentialUnavailableError("arcium-mxe");
+    }
 
     const base = twoPartyNetted(bookA, bookB);
     const computationId = generateComputationId("arc_mxe");
     const timestamp = new Date().toISOString();
-
-    if (realTransports) {
-      // Real MXE wiring is active — encrypt both books, submit, await the
-      // finalized computation and claim cryptographic MPC only from there.
-      const res = await fetch(`${ARCIUM_MXE_ENDPOINT}/net`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          computation_id: computationId,
-          book: {
-            a: bookA.legs.map((l) => ({ bucket: l.bucket, exposure: l.signedExposureUsd, haircut_bps: Math.round(l.haircut * 10_000) })),
-            b: bookB.legs.map((l) => ({ bucket: l.bucket, exposure: l.signedExposureUsd, haircut_bps: Math.round(l.haircut * 10_000) })),
-          },
-        }),
-        signal: AbortSignal.timeout(30_000),
-      });
-      if (!res.ok) {
-        throw new Error(`MXE computation failed (${res.status}) — failing closed, not simulating`);
-      }
-      const data = (await res.json()) as { trust_model?: string };
-      return {
-        ...base,
-        backend: "arcium",
-        trustModel: "cryptographic_mpc",
-        computationId: data.trust_model ?? computationId,
-        timestamp,
-      };
-    }
 
     log.debug("arcium backend ran as sealed-execution simulation", { computationId });
     return {
@@ -220,14 +197,16 @@ export class EnclaveBackend implements ConfidentialBackend {
   readonly kind: BackendKind = "enclave";
 
   get trustModel(): TrustModel {
-    return realTransports ? "hardware_attested_tee" : "simulated_plaintext_compute";
+    // A TEE claim can only come from a per-run verified quote, never from
+    // configuration — the getter stays conservative.
+    return "simulated_plaintext_compute";
   }
 
   async netTwoParty(
     bookA: PositionBook,
     bookB: PositionBook,
   ): Promise<ConfidentialNetMarginResult> {
-    checkTransport("enclave");
+    checkEnclaveTransport();
 
     const base = twoPartyNetted(bookA, bookB);
     const computationId = generateComputationId("tee_nitro");
@@ -293,6 +272,12 @@ export class EnclaveBackend implements ConfidentialBackend {
             enclaveMeasurement: raw.measurement,
           },
         };
+      }
+
+      if (env.confidential.enclaveQuoteRequired) {
+        throw new Error(
+          "Enclave returned no verified hardware attestation and ENCLAVE_QUOTE_REQUIRED is set — failing closed, not claiming TEE",
+        );
       }
 
       log.warn("enclave transport executed without a hardware attestation quote", { computationId });

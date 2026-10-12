@@ -236,6 +236,12 @@ function load(): Env {
       dataApiBase: process.env.DRIFT_DATA_API_BASE,
       subAccountCacheMs: process.env.DRIFT_SUBACCOUNT_CACHE_MS,
     },
+    confidential: {
+      realTransports: process.env.CONFIDENTIAL_REAL_TRANSPORTS,
+      arciumMxeEndpoint: process.env.ARCIUM_MXE_ENDPOINT,
+      enclaveEndpoint: process.env.ENCLAVE_ENDPOINT,
+      enclaveQuoteRequired: process.env.ENCLAVE_QUOTE_REQUIRED,
+    },
     escrow: {
       realSettle: process.env.ESCROW_REAL_SETTLE,
       rpcUrl: process.env.SOLANA_RPC_URL,
@@ -273,6 +279,11 @@ function load(): Env {
     }
     if (cfg.store.mode === "memory") {
       log.warn("SESSION_STORE_MODE=memory in production — deal rooms are lost on restart and not shared across instances");
+    }
+    if (cfg.confidential.realTransports && !cfg.confidential.enclaveEndpoint) {
+      log.warn(
+        "CONFIDENTIAL_REAL_TRANSPORTS is enabled but ENCLAVE_ENDPOINT is unset — confidential nets will fail closed (no plaintext fallback)",
+      );
     }
   }
 

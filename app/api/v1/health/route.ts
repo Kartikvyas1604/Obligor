@@ -41,6 +41,16 @@ export function GET() {
         fallback: env.oracle.fallbackEnabled,
         stalenessMs: env.oracle.stalenessMs,
       },
+      confidential: {
+        realTransportsRequired: env.confidential.realTransports,
+        // ArciumBackend never claims cryptographic_mpc in this build.
+        arcium: { wired: false, claims: "simulated_plaintext_compute" },
+        enclave: {
+          endpointConfigured: Boolean(env.confidential.enclaveEndpoint),
+          quoteRequired: env.confidential.enclaveQuoteRequired,
+          claims: "hardware_attested_tee only with a verified quote, else simulated_plaintext_compute",
+        },
+      },
     },
     disclaimer:
       "Obligor is confidential two-party margin analytics. Not a custody protocol, not an exchange. TEE ≠ MPC — trust models are labeled per backend.",

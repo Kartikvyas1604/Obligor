@@ -1,12 +1,24 @@
 //! Obligor Monad TEE Enclave (AWS Nitro / Marlin Oyster)
-//! Runs the identical two-party netting formula inside an isolated enclave and produces hardware-attested outputs.
+//!
+//! Runs the identical two-party netting formula inside an isolated enclave and
+//! produces attested outputs. The math is integer-based (cents + basis points)
+//! so results are deterministic and free of floating-point accumulation drift,
+//! and bucket ordering is stable (sorted by IM, ties in input order) so the
+//! same inputs always yield the same bytes.
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
+use std::time::Duration;
+
+/// Money fixed-point scale: 1 USD = 100 cents.
+const CENTS: i64 = 100;
+/// Haircut scale: 1.0 = 10_000 basis points.
+const BPS: i64 = 10_000;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PositionLeg {
@@ -60,10 +72,40 @@ pub struct EnclaveNettingResponse {
     pub attestation: AttestationQuote,
 }
 
-pub fn compute_siloed_im(legs: &[PositionLeg]) -> f64 {
+fn to_cents(usd: f64) -> i64 {
+    if !usd.is_finite() {
+        return 0;
+    }
+    (usd * CENTS as f64).round() as i64
+}
+
+fn to_bps(haircut: f64) -> i64 {
+    if !haircut.is_finite() || haircut < 0.0 {
+        return 0;
+    }
+    (haircut * BPS as f64).round() as i64
+}
+
+/// hair_cents = |cents| * bps / 10_000, rounded half-up, saturating.
+fn im_cents(abs_cents: i64, bps: i64) -> i64 {
+    let raw = abs_cents.saturating_mul(bps).saturating_add(BPS / 2);
+    raw / BPS
+}
+
+fn usd_from_cents(cents: i64) -> f64 {
+    cents as f64 / CENTS as f64
+}
+
+fn siloed_im_cents(legs: &[PositionLeg]) -> i64 {
     legs.iter()
-        .map(|leg| leg.haircut * leg.notional_usd.abs())
-        .sum()
+        .map(|leg| im_cents(to_cents(leg.notional_usd).abs(), to_bps(leg.haircut)))
+        .fold(0i64, |acc, v| acc.saturating_add(v))
+}
+
+struct BucketAcc {
+    exposure_cents: i64,
+    haircut_bps: i64,
+    notional_cents: i64,
 }
 
 pub fn compute_two_party_netted(
@@ -71,49 +113,71 @@ pub fn compute_two_party_netted(
     party_a_legs: &[PositionLeg],
     party_b_legs: &[PositionLeg],
 ) -> EnclaveNettingResponse {
-    let siloed_a = compute_siloed_im(party_a_legs);
-    let siloed_b = compute_siloed_im(party_b_legs);
-    let siloed_combined = siloed_a + siloed_b;
+    let siloed_a = siloed_im_cents(party_a_legs);
+    let siloed_b = siloed_im_cents(party_b_legs);
+    let siloed_combined = siloed_a.saturating_add(siloed_b);
 
-    let mut buckets: HashMap<String, (f64, f64, f64)> = HashMap::new(); // (exposure, max_haircut, notional)
+    // Insertion-ordered buckets: a Vec (stable order) + name → index map.
+    // Buckets are accumulated in integer cents so results are deterministic.
+    let mut order: Vec<(String, BucketAcc)> = Vec::new();
+    let mut index: HashMap<String, usize> = HashMap::new();
 
-    let all_legs = party_a_legs.iter().chain(party_b_legs.iter());
-    let mut total_net_exposure = 0.0;
-    let mut total_gross_notional = 0.0;
+    let mut total_net_exposure = 0i64;
+    let mut total_gross_notional = 0i64;
 
-    for leg in all_legs {
-        total_net_exposure += leg.signed_exposure_usd;
-        total_gross_notional += leg.notional_usd;
+    for leg in party_a_legs.iter().chain(party_b_legs.iter()) {
+        let exp = to_cents(leg.signed_exposure_usd);
+        let notional = to_cents(leg.notional_usd);
+        let hbps = to_bps(leg.haircut);
 
-        let entry = buckets.entry(leg.bucket.clone()).or_insert((0.0, leg.haircut, 0.0));
-        entry.0 += leg.signed_exposure_usd;
-        if leg.haircut > entry.1 {
-            entry.1 = leg.haircut;
+        total_net_exposure = total_net_exposure.saturating_add(exp);
+        total_gross_notional = total_gross_notional.saturating_add(notional);
+
+        let idx = match index.get(&leg.bucket) {
+            Some(i) => *i,
+            None => {
+                let i = order.len();
+                index.insert(leg.bucket.clone(), i);
+                order.push((
+                    leg.bucket.clone(),
+                    BucketAcc { exposure_cents: 0, haircut_bps: hbps, notional_cents: 0 },
+                ));
+                i
+            }
+        };
+        let acc = &mut order[idx].1;
+        acc.exposure_cents = acc.exposure_cents.saturating_add(exp);
+        acc.notional_cents = acc.notional_cents.saturating_add(notional);
+        if hbps > acc.haircut_bps {
+            acc.haircut_bps = hbps;
         }
-        entry.2 += leg.notional_usd;
     }
 
-    let mut bucket_results = Vec::new();
-    let mut netted_combined = 0.0;
-
-    for (bucket_name, (exposure, haircut, _)) in buckets {
-        let im = haircut * exposure.abs();
-        netted_combined += im;
-        bucket_results.push(BucketResult {
-            bucket: bucket_name,
-            exposure_usd: (exposure * 100.0).round() / 100.0,
-            haircut,
-            im_usd: (im * 100.0).round() / 100.0,
-        });
+    let mut netted_combined = 0i64;
+    let mut bucket_results: Vec<(i64, BucketResult)> = Vec::with_capacity(order.len());
+    for (bucket_name, acc) in order.into_iter() {
+        let im = im_cents(acc.exposure_cents.saturating_abs(), acc.haircut_bps);
+        netted_combined = netted_combined.saturating_add(im);
+        bucket_results.push((
+            im,
+            BucketResult {
+                bucket: bucket_name,
+                exposure_usd: usd_from_cents(acc.exposure_cents),
+                haircut: acc.haircut_bps as f64 / BPS as f64,
+                im_usd: usd_from_cents(im),
+            },
+        ));
     }
+    // Stable sort by IM desc — ties keep input order, matching the Node path.
+    bucket_results.sort_by(|a, b| b.0.cmp(&a.0));
+    let buckets: Vec<BucketResult> = bucket_results.into_iter().map(|(_, b)| b).collect();
 
-    let savings = (siloed_combined - netted_combined).max(0.0);
+    let savings = (siloed_combined - netted_combined).max(0);
 
     // SHA256 digest of the computation inputs/outputs — proof-of-execution
     // binding, NOT a hardware attestation. A real Nitro/Oyster NSM call
-    // (aws_nitro_enclaves_nsm_core::nsm_get_random / describe…) replaces this
-    // once the enclave binary boots inside a real enclave VM, and `verified`
-    // flips on the HOST verifier — never hardcoded here.
+    // replaces this once the enclave binary boots inside a real enclave VM,
+    // and `verified` flips on the HOST verifier — never hardcoded here.
     let mut hasher = Sha256::new();
     hasher.update(session_id.as_bytes());
     hasher.update(siloed_combined.to_le_bytes());
@@ -122,14 +186,14 @@ pub fn compute_two_party_netted(
 
     EnclaveNettingResponse {
         session_id: session_id.to_string(),
-        siloed_a_usd: (siloed_a * 100.0).round() / 100.0,
-        siloed_b_usd: (siloed_b * 100.0).round() / 100.0,
-        siloed_combined_usd: (siloed_combined * 100.0).round() / 100.0,
-        netted_combined_usd: (netted_combined * 100.0).round() / 100.0,
-        savings_usd: (savings * 100.0).round() / 100.0,
-        gross_notional_usd: (total_gross_notional * 100.0).round() / 100.0,
-        net_exposure_usd: (total_net_exposure * 100.0).round() / 100.0,
-        buckets: bucket_results,
+        siloed_a_usd: usd_from_cents(siloed_a),
+        siloed_b_usd: usd_from_cents(siloed_b),
+        siloed_combined_usd: usd_from_cents(siloed_combined),
+        netted_combined_usd: usd_from_cents(netted_combined),
+        savings_usd: usd_from_cents(savings),
+        gross_notional_usd: usd_from_cents(total_gross_notional),
+        net_exposure_usd: usd_from_cents(total_net_exposure),
+        buckets,
         attestation: AttestationQuote {
             // Honest default: this build cannot issue a hardware attestation
             // outside a real enclave VM. The host verifies quotes and flips
@@ -142,6 +206,9 @@ pub fn compute_two_party_netted(
         },
     }
 }
+
+static ACTIVE: AtomicUsize = AtomicUsize::new(0);
+const MAX_CONNECTIONS: usize = 128;
 
 fn main() {
     let addr = std::env::var("OBLIGOR_ENCLAVE_ADDR").unwrap_or_else(|_| "127.0.0.1:5000".to_string());
@@ -157,7 +224,18 @@ fn main() {
     for stream in listener.incoming() {
         match stream {
             Ok(s) => {
-                thread::spawn(move || handle_connection(s));
+                // Bounded concurrency: refuse overload instead of spawning an
+                // unbounded number of threads (connection-flood DoS guard).
+                if ACTIVE.load(Ordering::SeqCst) >= MAX_CONNECTIONS {
+                    let mut s = s;
+                    respond(&mut s, 503, "{\"ok\":false,\"error\":\"too many connections\"}");
+                    continue;
+                }
+                ACTIVE.fetch_add(1, Ordering::SeqCst);
+                thread::spawn(move || {
+                    handle_connection(s);
+                    ACTIVE.fetch_sub(1, Ordering::SeqCst);
+                });
             }
             Err(e) => eprintln!("enclave accept error: {e}"),
         }
@@ -167,6 +245,10 @@ fn main() {
 /// Minimal HTTP/1.1 handler — no external crates so the enclave surface stays
 /// auditable. Handles GET /health and POST /net (JSON), Connection: close.
 fn handle_connection(mut stream: TcpStream) {
+    // Bound how long a slow client can hold a worker thread.
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
+
     let mut buf = Vec::new();
     // Read headers (up to the blank line) in bounded chunks.
     let mut header_end = None;
@@ -209,7 +291,8 @@ fn handle_connection(mut stream: TcpStream) {
             }
         })
         .next()
-        .unwrap_or(0);
+        .unwrap_or(0)
+        .min(4 * 1024 * 1024);
 
     // Read the remaining body up to content_length.
     let mut body = buf[header_end..].to_vec();
@@ -260,6 +343,7 @@ fn respond(stream: &mut TcpStream, status: u16, body: &str) {
         404 => "Not Found",
         422 => "Unprocessable Entity",
         500 => "Internal Server Error",
+        503 => "Service Unavailable",
         _ => "OK",
     };
     let response = format!(
