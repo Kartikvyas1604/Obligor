@@ -1,7 +1,6 @@
-import { NextResponse } from "next/server";
 import { z } from "zod";
 import { generatePayerKey, signObligorReceipt } from "@/lib/x402";
-import { rateLimitCheck } from "@/lib/http";
+import { parseBody, rateLimitFor, readJsonBody, withApi, ok } from "@/lib/http";
 
 const signRequestSchema = z.object({
   scheme: z.string().min(1),
@@ -18,43 +17,31 @@ const signRequestSchema = z.object({
  * participate in full cryptographic receipt verification without exposing
  * private keys or relying on unverified headers.
  */
-export async function POST(req: Request) {
-  const rateLimitResponse = rateLimitCheck(req, "compute");
-  if (rateLimitResponse) return rateLimitResponse;
-
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
-  }
-
-  const parsed = signRequestSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { ok: false, error: "Invalid challenge parameters", details: parsed.error.issues },
-      { status: 422 },
-    );
-  }
+export const POST = withApi(async ({ req }) => {
+  const headers = rateLimitFor("compute", req);
+  const bodyRaw = await readJsonBody(req);
+  const body = parseBody(signRequestSchema, bodyRaw);
 
   const payer = generatePayerKey();
   const paymentSignature = signObligorReceipt(
     {
-      scheme: parsed.data.scheme,
-      network: parsed.data.network,
-      asset: parsed.data.asset,
-      payTo: parsed.data.payTo,
-      baseUnits: parsed.data.baseUnits,
+      scheme: body.scheme,
+      network: body.network,
+      asset: body.asset,
+      payTo: body.payTo,
+      baseUnits: body.baseUnits,
     },
     payer,
-    parsed.data.amount,
+    body.amount,
   );
 
-  return NextResponse.json({
-    ok: true,
-    signer: payer.signer,
-    paymentSignature,
-    scheme: parsed.data.scheme,
-    network: parsed.data.network,
-  });
-}
+  return ok(
+    {
+      signer: payer.signer,
+      paymentSignature,
+      scheme: body.scheme,
+      network: body.network,
+    },
+    { headers },
+  );
+});

@@ -117,7 +117,7 @@ function scanTrackedForSecrets(): { offenders: string[]; viaGit: boolean } {
     viaGit = false;
   }
   for (const rel of files) {
-    const abs = join(REPO_ROOT, rel);
+    const abs = join(/*turbopackIgnore: true*/ REPO_ROOT, rel);
     try {
       const st = statSync(abs);
       if (!st.isFile() || st.size > 512 * 1024) continue;

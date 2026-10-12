@@ -39,7 +39,7 @@ const handles: Map<string, Database> = (globalForDb.__obligorSqlite ??= new Map(
 export function sqlitePath(): string {
   const configured = env.store.sqlitePath;
   const path = configured || `${env.runtime.dataDir}/obligor.db`;
-  return resolve(process.cwd(), path);
+  return resolve(/*turbopackIgnore: true*/ process.cwd(), path);
 }
 
 /**

@@ -75,7 +75,7 @@ export class FileStore implements SessionStore {
 
   constructor(dirOverride?: string, ttlMsOverride?: number) {
     this.ttlMs = ttlMsOverride;
-    const dir = resolve(process.cwd(), dirOverride ?? env.runtime.dataDir);
+    const dir = resolve(/*turbopackIgnore: true*/ process.cwd(), dirOverride ?? env.runtime.dataDir);
     try {
       mkdirSync(dir, { recursive: true });
     } catch (err) {
@@ -87,7 +87,7 @@ export class FileStore implements SessionStore {
       this.filePath = "";
       return;
     }
-    this.filePath = join(dir, "sessions.json");
+    this.filePath = join(/*turbopackIgnore: true*/ dir, "sessions.json");
   }
 
   private load() {
