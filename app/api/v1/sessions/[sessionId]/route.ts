@@ -19,6 +19,7 @@ import {
 } from "@/lib/deal-session";
 import { priceAndNormalizeLegs } from "@/lib/positions";
 import { walletSchema } from "@/lib/contracts";
+import { dealEscrowRelease } from "@/lib/deal-session";
 import type { PositionLeg, PartyId } from "@/lib/margin";
 
 const BODY_LIMIT = 256 * 1024;
@@ -183,7 +184,13 @@ export const POST = withApi<{ sessionId: string }>(async ({ req, params }) => {
       if (!updated) {
         throw ApiError.badRequest("Settlement requires escrow to be locked first");
       }
-      return notModified(publicSession(updated, authorizedParties(updated, tokenHeader)));
+      // The release split is computed server-side from the recorded deposits
+      // and the verified netting result — never invented on the client.
+      return NextResponse.json({
+        ok: true,
+        session: publicSession(updated, authorizedParties(updated, tokenHeader)),
+        escrowRelease: dealEscrowRelease(updated),
+      });
     }
   }
 });

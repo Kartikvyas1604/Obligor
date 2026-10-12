@@ -28,12 +28,22 @@ interface EscrowTx {
   message?: string;
 }
 
+/** Release math used ONLY for the clearly-labeled per-desk projection shown
+ *  before settlement. The confirmed split always comes from the server. */
+function projectedFreed(siloedA: number, siloedB: number, netMargin: number) {
+  const total = Math.round((siloedA + siloedB) * 100) / 100;
+  const freed = Math.max(0, Math.round((total - netMargin) * 100) / 100);
+  const a = total > 0 ? Math.round((freed * siloedA) / total * 100) / 100 : 0;
+  const b = Math.round((freed - a) * 100) / 100;
+  return { freed, a, b };
+}
+
 /**
  * Escrow settlement card — wired to the real escrow envelope:
- * POST /api/v1/escrow/deposit → POST /api/v1/escrow/settle.
- * Every step surfaces API failures honestly; on success the release split
- * comes from the server, not invented client-side. Amounts are netting
- * analytics — no funds move from desk wallets in this deployment.
+ * POST /api/v1/escrow/deposit → POST /api/v1/escrow/settle. The reported
+ * release split is always the server's (or in a deal room, the session settle
+ * response's). Amounts are netting analytics — no funds move from desk
+ * wallets in this deployment, and no transaction hash is ever fabricated.
  */
 export function EscrowVaultCard({
   siloedMarginA,
@@ -51,9 +61,8 @@ export function EscrowVaultCard({
   const [escrowTx, setEscrowTx] = useState<EscrowTx | null>(null);
   const [releasedSplit, setReleasedSplit] = useState<{ a: number; b: number } | null>(null);
 
-  const halfNetMargin = netMargin / 2;
-  const deskASavings = siloedMarginA - halfNetMargin;
-  const deskBSavings = siloedMarginB - halfNetMargin;
+  const totalLocked = Math.round((siloedMarginA + siloedMarginB) * 100) / 100;
+  const projection = projectedFreed(siloedMarginA, siloedMarginB, netMargin);
 
   /** Build honest escrow inputs from the verified run; throws on missing wallet. */
   function escrowInputs() {
@@ -71,19 +80,20 @@ export function EscrowVaultCard({
         chain: backend === "enclave" ? ("monad" as const) : ("solana" as const),
         partyA: a,
         partyB: b,
-        // Net deposit per desk (half of the combined net margin), matching the split shown.
-        amountAUsd: Math.round(halfNetMargin * 100) / 100,
-        amountBUsd: Math.round(halfNetMargin * 100) / 100,
+        // Each desk locks its own siloed margin; the release returns the
+        // surplus above the combined netted obligation proportionally.
+        amountAUsd: Math.round(siloedMarginA * 100) / 100,
+        amountBUsd: Math.round(siloedMarginB * 100) / 100,
         computationId,
       },
       settleBody: {
         escrowId,
         chain: backend === "enclave" ? ("monad" as const) : ("solana" as const),
-        totalLockedUsd: netMargin,
+        totalLockedUsd: totalLocked,
         nettedMarginUsd: netMargin,
         proofHash,
-        partyALockedUsd: Math.round(halfNetMargin * 100) / 100,
-        partyBLockedUsd: Math.round(halfNetMargin * 100) / 100,
+        partyALockedUsd: Math.round(siloedMarginA * 100) / 100,
+        partyBLockedUsd: Math.round(siloedMarginB * 100) / 100,
       },
     };
   }
@@ -93,20 +103,21 @@ export function EscrowVaultCard({
     setEscrowError(null);
     setEscrowState("depositing");
     try {
-      // Deal-room flows record deposit through the session lifecycle so the
-      // room state stays consistent for the counterparty too.
       if (sessionId) {
-        const res = await fetch(`/api/v1/sessions/${sessionId}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "deposit_escrow",
-            partyId: "A",
-            amount: inputs.body.amountAUsd,
-            txHash: inputs.body.escrowId,
-          }),
-        });
-        if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? `Session deposit failed (${res.status})`);
+        // Deal-room flows record both desks' deposits through the room
+        // lifecycle so the counterparty sees the same escrow state. No
+        // txHash is sent: this envelope carries an escrow id, not a chain tx.
+        for (const [partyId, amount] of [
+          ["A", Math.round(siloedMarginA * 100) / 100],
+          ["B", Math.round(siloedMarginB * 100) / 100],
+        ] as const) {
+          const res = await fetch(`/api/v1/sessions/${sessionId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "deposit_escrow", partyId, amount }),
+          });
+          if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? `Session deposit failed (${res.status})`);
+        }
       } else {
         const res = await fetch("/api/v1/escrow/deposit", {
           method: "POST",
@@ -134,7 +145,14 @@ export function EscrowVaultCard({
           body: JSON.stringify({ action: "settle" }),
         });
         if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? `Settle failed (${res.status})`);
-        setReleasedSplit({ a: Math.round(deskASavings * 100) / 100, b: Math.round(deskBSavings * 100) / 100 });
+        const data = (await res.json()) as {
+          escrowRelease?: { releasedToPartyAUsd?: number; releasedToPartyBUsd?: number; freedCapitalUsd?: number };
+        };
+        if (!data.escrowRelease) throw new Error("Settle succeeded but returned no release split");
+        setReleasedSplit({
+          a: data.escrowRelease.releasedToPartyAUsd ?? 0,
+          b: data.escrowRelease.releasedToPartyBUsd ?? 0,
+        });
       } else {
         const inputs = escrowInputs();
         const res = await fetch("/api/v1/escrow/settle", {
@@ -165,6 +183,10 @@ export function EscrowVaultCard({
     setReleasedSplit(null);
   }
 
+  const confirmed = releasedSplit !== null;
+  const showA = confirmed ? releasedSplit.a : projection.a;
+  const showB = confirmed ? releasedSplit.b : projection.b;
+
   return (
     <div className="rounded-[24px] border border-border bg-card p-6 sm:p-8 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border pb-4">
@@ -179,9 +201,9 @@ export function EscrowVaultCard({
             </span>
           </h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            Records the bilateral deposit split and computes the release against the verified
-            netting result. Escrow runs against the escrow envelope API — this session moves
-            analytics, not funds.
+            Records the bilateral deposit split (each desk locks its siloed margin) and computes
+            the proportional release against the verified netting result. This session moves
+            analytics, not funds — the envelope carries no fabricated transaction hash.
           </p>
         </div>
 
@@ -216,19 +238,19 @@ export function EscrowVaultCard({
         {/* Desk A Escrow */}
         <div className="rounded-xl border border-border p-4 space-y-2">
           <div className="flex justify-between items-center text-xs">
-            <span className="font-semibold text-foreground">Desk A obligation</span>
-            <span className="text-success font-mono">
-              Freed: +{usdFmt(Math.max(0, deskASavings))}
+            <span className="font-semibold text-foreground">Desk A escrow</span>
+            <span className={`font-mono ${confirmed ? "text-success" : "text-muted-foreground"}`}>
+              {confirmed ? `Released: +${usdFmt(showA)}` : `Est. freed: +${usdFmt(showA)}`}
             </span>
           </div>
           <div className="space-y-1 text-xs font-mono">
             <div className="flex justify-between text-muted-foreground">
-              <span>Solo siloed margin:</span>
-              <span className="line-through text-destructive">{usdFmt(siloedMarginA)}</span>
+              <span>Siloed margin locked:</span>
+              <span className="text-foreground font-bold">{usdFmt(siloedMarginA)}</span>
             </div>
-            <div className="flex justify-between text-foreground font-bold">
-              <span>Required net deposit:</span>
-              <span>{usdFmt(halfNetMargin)}</span>
+            <div className="flex justify-between text-muted-foreground">
+              <span>Remaining net obligation:</span>
+              <span className="text-foreground">{usdFmt(Math.round((siloedMarginA - showA) * 100) / 100)}</span>
             </div>
           </div>
         </div>
@@ -236,23 +258,28 @@ export function EscrowVaultCard({
         {/* Desk B Escrow */}
         <div className="rounded-xl border border-border p-4 space-y-2">
           <div className="flex justify-between items-center text-xs">
-            <span className="font-semibold text-foreground">Desk B obligation</span>
-            <span className="text-success font-mono">
-              Freed: +{usdFmt(Math.max(0, deskBSavings))}
+            <span className="font-semibold text-foreground">Desk B escrow</span>
+            <span className={`font-mono ${confirmed ? "text-success" : "text-muted-foreground"}`}>
+              {confirmed ? `Released: +${usdFmt(showB)}` : `Est. freed: +${usdFmt(showB)}`}
             </span>
           </div>
           <div className="space-y-1 text-xs font-mono">
             <div className="flex justify-between text-muted-foreground">
-              <span>Solo siloed margin:</span>
-              <span className="line-through text-destructive">{usdFmt(siloedMarginB)}</span>
+              <span>Siloed margin locked:</span>
+              <span className="text-foreground font-bold">{usdFmt(siloedMarginB)}</span>
             </div>
-            <div className="flex justify-between text-foreground font-bold">
-              <span>Required net deposit:</span>
-              <span>{usdFmt(halfNetMargin)}</span>
+            <div className="flex justify-between text-muted-foreground">
+              <span>Remaining net obligation:</span>
+              <span className="text-foreground">{usdFmt(Math.round((siloedMarginB - showB) * 100) / 100)}</span>
             </div>
           </div>
         </div>
       </div>
+      <p className="text-[11px] text-muted-foreground -mt-3">
+        {confirmed
+          ? "Split confirmed by the server from the verified netting result."
+          : "Projection: freed capital split proportionally to each desk’s locked siloed margin. The confirmed split is returned by the server on settle."}
+      </p>
 
       {/* Interactive Actions */}
       <div className="pt-2 space-y-3">
@@ -263,7 +290,7 @@ export function EscrowVaultCard({
             className="w-full flex items-center justify-center gap-2 rounded-full bg-primary py-3.5 px-6 font-semibold text-primary-foreground text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             <Lock className="h-4 w-4" aria-hidden />
-            <span>Record deposit to escrow ({usdFmt(netMargin)} total)</span>
+            <span>Record deposit to escrow ({usdFmt(totalLocked)} total siloed)</span>
           </button>
         )}
 
@@ -279,15 +306,18 @@ export function EscrowVaultCard({
             <div className="rounded-xl border border-success/30 bg-success/10 p-4 text-xs text-success space-y-1">
               <div className="flex items-center gap-2 font-bold">
                 <CheckCircle2 className="h-4 w-4" aria-hidden />
-                <span>Deposit recorded against the escrow envelope</span>
+                <span>Deposit intent recorded against the escrow envelope</span>
               </div>
               <p className="text-foreground">
-                Both desks committed {usdFmt(halfNetMargin)} net each. {usdFmt(savingsUsd)} is verified as
-                excess against the netting result and ready to compute for release.
+                Both desks locked their siloed margins ({usdFmt(totalLocked)} in total). {usdFmt(savingsUsd)} is
+                verified as excess against the netted obligation and ready to compute for release.
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Envelope id only — no on-chain transaction has been fabricated or executed in this deployment.
               </p>
               {escrowTx?.escrowId && (
                 <div className="pt-1 font-mono text-[11px] text-muted-foreground break-all">
-                  escrow id: {escrowTx.escrowId}
+                  escrow envelope id: {escrowTx.escrowId}
                 </div>
               )}
             </div>
@@ -318,9 +348,9 @@ export function EscrowVaultCard({
               Server-computed split against the verified netting result:{" "}
               <span className="font-mono text-foreground">Desk A {usdFmt(releasedSplit?.a ?? 0)}</span> ·{" "}
               <span className="font-mono text-foreground">Desk B {usdFmt(releasedSplit?.b ?? 0)}</span>. Capital
-              efficiency improved by {Math.round((savingsUsd / (siloedMarginA + siloedMarginB)) * 100)}%.
+              efficiency improved by {Math.round((savingsUsd / totalLocked) * 100)}%.
               On-chain execution happens in the escrow contract repo — this envelope carries the
-              release computation, not a funds transfer.
+              release computation, not a funds transfer and not a fabricated transaction hash.
             </p>
             {escrowTx?.proofHash && (
               <p className="font-mono text-[11px] text-muted-foreground break-all">proof: {escrowTx.proofHash}</p>

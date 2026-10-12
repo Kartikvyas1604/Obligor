@@ -320,4 +320,28 @@ export function settleDealSession(sessionId: string): DealSession | null {
   return session;
 }
 
+/**
+ * Server-computed release split for a settled deal room, mirroring the escrow
+ * settle contract: freed capital is returned to each desk proportionally to
+ * the siloed margin it locked (sum of released = freed; remaining = netted).
+ * Returns null until both desks locked and a netting result exists. The
+ * client never computes a release split for the session path.
+ */
+export function dealEscrowRelease(session: DealSession): {
+  freedCapitalUsd: number;
+  releasedToPartyAUsd: number;
+  releasedToPartyBUsd: number;
+} | null {
+  if (!session.result || !session.partyB) return null;
+  const lockedA = session.partyA.depositedAmountUsd;
+  const lockedB = session.partyB.depositedAmountUsd;
+  const totalLocked = Math.round((lockedA + lockedB) * 100) / 100;
+  if (totalLocked <= 0) return null;
+  const netted = session.result.nettedCombinedUsd;
+  const freedCapital = Math.max(0, Math.round((totalLocked - netted) * 100) / 100);
+  const releasedToA = Math.round((freedCapital * lockedA) / totalLocked * 100) / 100;
+  const releasedToB = Math.round((freedCapital - releasedToA) * 100) / 100;
+  return { freedCapitalUsd: freedCapital, releasedToPartyAUsd: releasedToA, releasedToPartyBUsd: releasedToB };
+}
+
 export const SESSION_TTL_MS = () => env.store.ttlMs;
