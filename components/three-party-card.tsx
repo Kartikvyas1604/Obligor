@@ -73,7 +73,7 @@ export function ThreePartyCard() {
         | { parties?: FixtureParty[]; message?: string }
         | null;
       if (!res.ok || !body?.parties) {
-        setError(body?.message ?? "Fixture unavailable — it is gated behind DEMO_ALLOW_FIXTURES.");
+        setError(body?.message ?? "Reference network unavailable in this environment.");
         return;
       }
       setFixtures(body.parties);
@@ -160,7 +160,7 @@ export function ThreePartyCard() {
             {loadingFixture ? (
               <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
             ) : (
-              "Load fixture"
+              "Load reference network"
             )}
           </button>
           <button

@@ -2,15 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bot, Layers, ShieldAlert, ShieldCheck, Users, Zap } from "lucide-react";
+import { Bot, Layers, ShieldCheck, Users, Zap } from "lucide-react";
 
 const LINKS = [
   { href: "/clear", label: "Clear", icon: Layers },
   { href: "/deal", label: "Deal rooms", icon: Users },
-  { href: "/monad", label: "Monad", icon: Zap },
+  { href: "/monad", label: "Parallel engine", icon: Zap },
   { href: "/agents", label: "Agents", icon: Bot },
-  { href: "/security", label: "Security", icon: ShieldAlert },
-  { href: "/trust", label: "Trust", icon: ShieldCheck },
+  { href: "/security", label: "Security", icon: ShieldCheck },
 ];
 
 export function NavLinks() {

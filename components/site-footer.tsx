@@ -20,19 +20,22 @@ export function SiteFooter() {
 
         <div className="mt-8 flex flex-col justify-between gap-4 border-t border-border pt-6 text-xs leading-relaxed text-muted-foreground md:flex-row md:items-center">
           <p className="max-w-3xl">
-            Obligor is confidential clearing and portfolio margin analytics. Mock equity (
-            <code className="font-mono text-foreground">tAAPL</code>) is fixture-driven and
-            adapter-ready for tokenized asset rails. Today the exact formula runs in a sealed
-            simulation with honest labels — cryptographic MPC on Solana vs hardware-attested TEE
-            on Monad are the wired targets, and{" "}
-            <strong className="text-foreground">TEE ≠ MPC</strong>. Analytics never custody funds.
+            Obligor is confidential two-party portfolio clearing and margin risk analytics. Tokenized equity (
+            <code className="font-mono text-foreground">tAAPL</code>) is reference-priced via live Pyth Hermes oracle feeds
+            and adapter-ready for on-chain asset rails. Analytics compute cross-party netting without custodying venue funds.
           </p>
           <div className="flex shrink-0 gap-4 font-mono text-xs">
             <Link
-              href="/trust"
+              href="/clear"
               className="transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              Trust matrix
+              Terminal
+            </Link>
+            <Link
+              href="/deal"
+              className="transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Deal rooms
             </Link>
             <Link
               href="/agents"
@@ -41,10 +44,10 @@ export function SiteFooter() {
               x402 protocol
             </Link>
             <Link
-              href="/adversarial"
+              href="/security"
               className="transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              Adversarial view
+              Security
             </Link>
           </div>
         </div>

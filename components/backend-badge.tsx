@@ -40,7 +40,7 @@ export function BackendBadge({ kind, showNote = false, trustModel }: { kind: Bac
         {trustModel ? TRUST_LABELS[trustModel] : text}
       </span>
       {showNote && (
-        <span className="text-xs text-muted-foreground max-w-sm">{trustModel ? note : note}</span>
+        <span className="text-xs text-muted-foreground max-w-sm">{note}</span>
       )}
     </span>
   );

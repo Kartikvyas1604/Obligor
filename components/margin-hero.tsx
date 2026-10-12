@@ -173,10 +173,10 @@ export function MarginHero({
           New session
         </button>
         <Link
-          href="/adversarial"
+          href="/deal"
           className="group inline-flex h-10 items-center gap-2 rounded-md px-4 text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          Show the dangerous counterfactual
+          Open bilateral deal room
           <ArrowRight className="h-4 w-4 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden />
         </Link>
       </div>

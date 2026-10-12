@@ -25,7 +25,7 @@ const BUCKETS: Array<{ bucket: string; label: string; venueHint: Venue; sideHint
   { bucket: "BTC", label: "BTC (perp or spot)", venueHint: "drift", sideHint: "long", haircut: 0.15 },
   { bucket: "ETH", label: "ETH (perp or spot)", venueHint: "drift", sideHint: "long", haircut: 0.15 },
   { bucket: "USD", label: "USDC (lend / deposit)", venueHint: "kamino", sideHint: "lend", haircut: 0.1 },
-  { bucket: "AAPL", label: "tAAPL (mock equity)", venueHint: "mock_equity", sideHint: "long", haircut: 0.25 },
+  { bucket: "AAPL", label: "tAAPL (Tokenized equity)", venueHint: "mock_equity", sideHint: "long", haircut: 0.25 },
 ];
 
 /**

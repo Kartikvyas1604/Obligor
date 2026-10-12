@@ -12,10 +12,9 @@ import { ChainToggle } from "@/components/chain-toggle";
 const LINKS = [
   { href: "/clear", label: "Clear" },
   { href: "/deal", label: "Deal rooms" },
-  { href: "/monad", label: "Monad" },
+  { href: "/monad", label: "Parallel engine" },
   { href: "/agents", label: "Agents" },
   { href: "/security", label: "Security" },
-  { href: "/trust", label: "Trust" },
 ];
 
 export function SiteHeader() {

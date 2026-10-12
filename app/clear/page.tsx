@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
   Cpu,
   LoaderCircle,
@@ -219,10 +220,6 @@ export default function ClearPage() {
 
   const siloed = useMemo(() => twoPartySiloedSafe(bookA, bookB), [bookA, bookB]);
   const netted = useMemo(() => twoPartyNettedSafe(bookA, bookB), [bookA, bookB]);
-
-  function loadAdversarialDemo() {
-    window.open("/adversarial", "_self");
-  }
 
   function connectPartyA(address: string) {
     setBookA((b) => ({ ...b, wallet: address }));
@@ -458,15 +455,14 @@ export default function ClearPage() {
                   disabled={fixtureLoading}
                   className="rounded-full border border-border bg-secondary px-3 py-1 text-xs text-muted-foreground hover:border-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 >
-                  {fixtureLoading ? "Loading demo books…" : "Load demo record books"}
+                  {fixtureLoading ? "Loading portfolios…" : "Load sample portfolios"}
                 </button>
-                <button
-                  type="button"
-                  onClick={loadAdversarialDemo}
-                  className="rounded-full border border-border bg-secondary px-3 py-1 text-xs text-muted-foreground hover:border-destructive/50 hover:text-destructive transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                <Link
+                  href="/deal"
+                  className="rounded-full border border-border bg-secondary px-3 py-1 text-xs text-muted-foreground hover:border-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  See the dangerous counterfactual
-                </button>
+                  Create deal room →
+                </Link>
               </div>
             </div>
 
