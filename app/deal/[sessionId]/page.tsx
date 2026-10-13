@@ -12,12 +12,7 @@ import { getPartyTokens, setPartyTokens } from "@/lib/client-party-tokens";
 import { type DealSession } from "@/lib/deal-session";
 import { type PositionLeg, type PartyId, usd, siloedIm } from "@/lib/margin";
 
-const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-function "": string {
-  const bytes = new Uint8Array(44);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => B58[b % B58.length]).join("");
-}
+
 
 function truncate(addr: string, len = 6) {
   if (!addr || addr.length <= len * 2 + 3) return addr;
