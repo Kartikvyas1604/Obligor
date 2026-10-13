@@ -106,7 +106,6 @@ export default function ClearPage() {
   const [apiError, setApiError] = useState<string | null>(null);
 
   const [builderModalParty, setBuilderModalParty] = useState<PartyId | null>(null);
-  const [fixtureLoading, setFixtureLoading] = useState(false);
   const [fixtureError, setFixtureError] = useState<string | null>(null);
   const [oracleSyncing, setOracleSyncing] = useState(false);
   const [oracleSyncMessage, setOracleSyncMessage] = useState<string | null>(null);
@@ -184,34 +183,7 @@ export default function ClearPage() {
   }
 
   /** Demo record books — served ONLY by the gated demo endpoint. */
-  async function loadDemoBooks() {
-    setFixtureLoading(true);
-    setFixtureError(null);
-    try {
-      const res = await fetch("/api/v1/demo/fixture-two-party", { method: "POST" });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { message?: string } | null;
-        setFixtureError(
-          body?.message ??
-            "Demo record books are not available in this environment. Add your positions instead.",
-        );
-        return;
-      }
-      const data = (await res.json()) as { partyA: PositionBook; partyB: PositionBook };
-      setBookA(data.partyA);
-      setBookB(data.partyB);
-      setWalletAInput(data.partyA.wallet);
-      setWalletBInput(data.partyB.wallet);
-      setErrorA(null);
-      setErrorB(null);
-      setPhase("setup");
-      setComputeError(null);
-    } catch {
-      setFixtureError("Could not reach the demo endpoint. Add your positions instead.");
-    } finally {
-      setFixtureLoading(false);
-    }
-  }
+
 
   useEffect(() => {
     const timers = timersRef.current;
