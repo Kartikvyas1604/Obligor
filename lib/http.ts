@@ -194,7 +194,7 @@ export function withApi<P = Record<string, string | string[]>>(
 ) {
   return async function wrapped(
     req: NextRequest,
-    context?: { params: Promise<P> },
+    context: { params: Promise<P> },
   ): Promise<NextResponse> {
     const requestId = newRequestId();
     try {
