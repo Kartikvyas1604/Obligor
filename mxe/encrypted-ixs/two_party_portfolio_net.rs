@@ -4,8 +4,8 @@
 //! Inputs: Encrypted signed exposures and haircuts for Party A and Party B.
 //! Output: Scaled siloed IM for Party A, siloed IM for Party B, and combined netted margin.
 
-const MAX_LEGS: usize = 8;
-const NUM_BUCKETS: usize = 6; // 0 = SOL, 1 = BTC, 2 = ETH, 3 = AAPL, 4 = MON, 5 = USD
+pub const MAX_LEGS: usize = 8;
+pub const NUM_BUCKETS: usize = 6; // 0 = SOL, 1 = BTC, 2 = ETH, 3 = AAPL, 4 = MON, 5 = USD
 
 #[derive(Clone, Copy, Default, Debug)]
 pub struct EncryptedLeg {
