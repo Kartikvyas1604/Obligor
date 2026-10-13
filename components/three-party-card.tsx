@@ -100,7 +100,7 @@ export function ThreePartyCard() {
             wallet: f.wallet,
             legs: serializeLegs(f.legs),
           })),
-          demoPayment: true,
+          demoPayment: false,
         }),
       });
       const body = (await res.json().catch(() => null)) as

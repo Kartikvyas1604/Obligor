@@ -246,7 +246,7 @@ export function verifyObligorReceipt(
  */
 export function isPaid(
   paymentSignature: string | null,
-  demoPayment: boolean,
+  demoPayment?: boolean,
   chain?: Chain,
 ): boolean {
   const viaDemo = Boolean(demoPayment) && env.demo.allowUnpaid;

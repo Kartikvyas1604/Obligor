@@ -98,7 +98,7 @@ function AgentTerminal({
             { text: `→ Signing challenge terms with ephemeral ed25519 agent key...`, cls: "t-muted" },
           ]);
 
-          let sigHeader = `sig_${Date.now()}`;
+          let sigHeader = undefined; // Real signing via wallet required for production
           try {
             if (xChallenge?.scheme && xChallenge?.network && xChallenge?.asset && xChallenge?.payTo) {
               const signRes = await fetch("/api/v1/x402/sign-receipt", {

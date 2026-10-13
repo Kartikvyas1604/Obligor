@@ -263,7 +263,7 @@ export default function ClearPage() {
             backend,
             partyA: { wallet: bookA.wallet || "local-desk-a", legs: serializeLegs(bookA.legs, "A") },
             partyB: { wallet: bookB.wallet || "local-desk-b", legs: serializeLegs(bookB.legs, "B") },
-            demoPayment: true,
+            demoPayment: false,
           }),
         });
         if (response.ok) {
@@ -449,14 +449,7 @@ export default function ClearPage() {
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={loadDemoBooks}
-                  disabled={fixtureLoading}
-                  className="rounded-full border border-border bg-secondary px-3 py-1 text-xs text-muted-foreground hover:border-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                >
-                  {fixtureLoading ? "Loading portfolios…" : "Load sample portfolios"}
-                </button>
+
                 <Link
                   href="/deal"
                   className="rounded-full border border-border bg-secondary px-3 py-1 text-xs text-muted-foreground hover:border-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -745,7 +738,7 @@ async function registerComputationForVerify(
         backend,
         partyA: { wallet: bookA.wallet || "local-desk-a", legs: serializeLegs(bookA.legs, "A") },
         partyB: { wallet: bookB.wallet || "local-desk-b", legs: serializeLegs(bookB.legs, "B") },
-        demoPayment: true,
+        demoPayment: false,
       }),
     });
     if (!res.ok) return null;

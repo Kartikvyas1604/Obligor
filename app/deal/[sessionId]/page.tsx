@@ -88,9 +88,8 @@ export default function LiveDealPage({
         headers: partyHeaders(),
         body: JSON.stringify({
           action: "join",
-          // Simulated guest gets a runtime-generated demo wallet; its book
-          // starts EMPTY — the host builds positions for it after joining.
-          walletB: makeDemoWalletB(),
+          // Counterparty wallet must be provided by the connecting party
+          walletB: "",
           labelB: "Desk B (Counterparty)",
           legsB: [],
         }),
