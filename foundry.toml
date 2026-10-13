@@ -1,0 +1,10 @@
+# Foundry is scoped to the contracts/ tree so it never scans the app's TS `lib/`
+# directory or the Next.js static-export `out/` directory.
+[profile.default]
+src = "contracts"
+test = "contracts/test"
+script = "contracts/script"
+out = "contracts/out"
+libs = ["contracts/lib"]
+optimizer = true
+optimizer_runs = 200

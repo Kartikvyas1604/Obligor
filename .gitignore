@@ -49,6 +49,8 @@ yarn-error.log*
 # ---- build caches ----
 /cache
 /crash
+# ---- foundry (scoped to contracts/ via foundry.toml) ----
+/contracts/out
 
 # ---- rust / cargo (enclave + anchor program workspace) ----
 /target

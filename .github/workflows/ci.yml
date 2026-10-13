@@ -101,8 +101,10 @@ jobs:
       - name: Install Foundry (forge)
         uses: foundry-rs/foundry-toolchain@v1
 
-      - name: Build the Solidity escrow contract (checks, access control, AST warnings)
-        run: forge build --contracts contracts/ObligorEscrow.sol
+      - name: Build + test the Solidity escrow contract (custody + access control)
+        run: |
+          forge build
+          forge test -vv
 
   # The on-chain claim ("a deployable program") is only real if the SBF
   # artifact is produced. Installs the pinned Anchor + Agave toolchain, runs
