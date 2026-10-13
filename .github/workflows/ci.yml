@@ -64,7 +64,8 @@ jobs:
           npm run verify:security
 
   # Compiled-artifact claims become checkable: the Arcis circuit, Rust
-  # enclave, and Solidity escrow contract must not just exist but build.
+  # enclave, Anchor program, and Solidity escrow contract must not just exist
+  # but build.
   native:
     runs-on: ubuntu-latest
     steps:
@@ -73,18 +74,29 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache cargo registry
+      - name: Cache cargo registry + build dirs
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             enclave/obligor-enclave/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('enclave/obligor-enclave/Cargo.toml') }}
+            target
+            mxe/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('enclave/obligor-enclave/Cargo.toml', 'mxe/Cargo.toml', 'programs/obligor-escrow/Cargo.toml') }}
 
       - name: Build + typecheck the TEE enclave (honest attestation shape)
         run: cargo build --locked 2>/dev/null || cargo build
         working-directory: enclave/obligor-enclave
+
+      - name: Build the Anchor escrow program (host typecheck)
+        run: cargo build --manifest-path programs/obligor-escrow/Cargo.toml
+
+      - name: Build + test the Arcium/Arcis MXE circuit crate
+        run: |
+          cargo build --manifest-path mxe/Cargo.toml
+          cargo test  --manifest-path mxe/Cargo.toml
+          cargo build --manifest-path mxe/Cargo.toml --features anchor
 
       - name: Install Foundry (forge)
         uses: foundry-rs/foundry-toolchain@v1
@@ -92,5 +104,32 @@ jobs:
       - name: Build the Solidity escrow contract (checks, access control, AST warnings)
         run: forge build --contracts contracts/ObligorEscrow.sol
 
-  # Arcium program directory is Arcis/Anchor + toolchain dependent; compiles
-  # once the arcium CLI is pinned — tracked as a CI follow-up in README.
+  # The on-chain claim ("a deployable program") is only real if the SBF
+  # artifact is produced. Installs the pinned Anchor + Agave toolchain, runs
+  # `anchor build`, and asserts the .so + IDL exist.
+  anchor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Agave (Solana) CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: Install Anchor CLI (matches Anchor.toml anchor_version)
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor avm --force
+          avm install 1.1.2
+          avm use 1.1.2
+
+      - name: anchor build
+        run: anchor build
+
+      - name: Assert SBF artifact + IDL exist
+        run: |
+          test -f target/deploy/obligor_escrow.so
+          test -f target/idl/obligor_escrow.json
