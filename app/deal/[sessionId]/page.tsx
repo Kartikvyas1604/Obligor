@@ -13,7 +13,7 @@ import { type DealSession } from "@/lib/deal-session";
 import { type PositionLeg, type PartyId, usd, siloedIm } from "@/lib/margin";
 
 const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-function makeDemoWalletB(): string {
+function "": string {
   const bytes = new Uint8Array(44);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => B58[b % B58.length]).join("");
