@@ -18,6 +18,10 @@
  *   `ENCLAVE_QUOTE_REQUIRED=true` an un-attested run fails closed too.
  * - Both `trustModel` getters report the conservative label from config alone;
  *   a trust claim is only ever attached to a per-run verified result.
+ * - Production removes the plaintext-simulation default: with
+ *   CONFIDENTIAL_REAL_TRANSPORTS on (the prod default) a missing wire fails
+ *   closed; with it off, CONFIDENTIAL_ALLOW_SIMULATION must be explicitly set
+ *   or the request throws CONFIDENTIAL_SIMULATION_FORBIDDEN.
  */
 
 import {
@@ -28,7 +32,7 @@ import {
 } from "./margin";
 import { randomBytes } from "node:crypto";
 import { makeLogger } from "./logger";
-import { env } from "./env";
+import { env, isProduction } from "./env";
 import {
   AWS_NITRO_ROOT_G1_DER,
   pemToDer,
@@ -135,9 +139,10 @@ function generateComputationId(prefix: string): string {
 
 /** Thrown when real transports are required but not configured. */
 export class ConfidentialUnavailableError extends Error {
-  constructor(kind: string) {
+  constructor(kind: string, detail?: string) {
     super(
-      `CONFIDENTIAL_UNAVAILABLE: ${kind} transport is not configured and CONFIDENTIAL_REAL_TRANSPORTS forbids plaintext simulation. Set CONFIDENTIAL_REAL_TRANSPORTS=false or wire the real transport.`,
+      detail ??
+        `CONFIDENTIAL_UNAVAILABLE: ${kind} transport is not configured and CONFIDENTIAL_REAL_TRANSPORTS forbids plaintext simulation. Set CONFIDENTIAL_REAL_TRANSPORTS=false or wire the real transport.`,
     );
     this.name = "ConfidentialUnavailableError";
   }
@@ -148,6 +153,40 @@ const ENCLAVE_ENDPOINT = env.confidential.enclaveEndpoint;
 
 function checkEnclaveTransport() {
   if (realTransports && !ENCLAVE_ENDPOINT) throw new ConfidentialUnavailableError("enclave");
+}
+
+function plaintextSimulationForbidden(): boolean {
+  return isProduction() && !env.confidential.allowSimulation;
+}
+
+/**
+ * Guard for the two-party plaintext-simulation code paths. Production removes
+ * the simulation default: unless the operator explicitly sets
+ * CONFIDENTIAL_ALLOW_SIMULATION=true, a production request that would compute
+ * in plaintext fails closed. Development is unaffected (simulation stays the
+ * dev default).
+ */
+function ensureSimulationPermitted(kind: string): void {
+  if (realTransports) return; // real transport path, not a simulation
+  if (!plaintextSimulationForbidden()) return;
+  throw new ConfidentialUnavailableError(
+    kind,
+    `CONFIDENTIAL_SIMULATION_FORBIDDEN: ${kind} would run plaintext simulation, which is disabled in production. Wire a real transport (CONFIDENTIAL_REAL_TRANSPORTS=true) or set CONFIDENTIAL_ALLOW_SIMULATION=true to explicitly permit an honestly-labeled plaintext simulation.`,
+  );
+}
+
+/**
+ * N-party netting (J3) has no real confidential transport in this build — it
+ * always computes the plaintext formula locally. It therefore requires the
+ * explicit simulation opt-in in production regardless of the two-party
+ * CONFIDENTIAL_REAL_TRANSPORTS setting (which only governs the 2-party wire).
+ */
+export function ensureNPartyPlaintextAllowed(): void {
+  if (!plaintextSimulationForbidden()) return;
+  throw new ConfidentialUnavailableError(
+    "multi-nparty",
+    "CONFIDENTIAL_SIMULATION_FORBIDDEN: N-party netting has no real confidential transport in this build, so it would run plaintext simulation, which is disabled in production. Set CONFIDENTIAL_ALLOW_SIMULATION=true to explicitly permit an honestly-labeled plaintext computation.",
+  );
 }
 
 /**
@@ -181,6 +220,7 @@ export class ArciumBackend implements ConfidentialBackend {
       // cannot honour a demand for real transports — fail closed and loud.
       throw new ConfidentialUnavailableError("arcium-mxe");
     }
+    ensureSimulationPermitted("arcium");
 
     const base = twoPartyNetted(bookA, bookB);
     const computationId = generateComputationId("arc_mxe");
@@ -334,6 +374,7 @@ export class EnclaveBackend implements ConfidentialBackend {
       };
     }
 
+    ensureSimulationPermitted("enclave");
     log.debug("enclave backend ran as sealed-execution simulation", { computationId });
     return {
       ...base,
@@ -372,6 +413,7 @@ export class SimulatedBackend implements ConfidentialBackend {
     bookA: PositionBook,
     bookB: PositionBook,
   ): Promise<ConfidentialNetMarginResult> {
+    ensureSimulationPermitted("simulated");
     const base = twoPartyNetted(bookA, bookB);
     return {
       ...base,

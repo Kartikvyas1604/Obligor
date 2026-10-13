@@ -145,7 +145,15 @@ const envSchema = z.object({
   confidential: z.object({
     // When true, the confidential backends MUST carry a real transport; a
     // missing/unsupported wire fails closed instead of silently simulating.
-    realTransports: boolish(false),
+    // Defaults ON in production so a prod deployment never silently runs
+    // plaintext simulation; explicitly set false (plus ALLOW_SIMULATION below)
+    // to opt into an honestly-labeled simulation.
+    realTransports: boolish(isProdBuild),
+    // Explicit opt-in to run the exact formula as sealed-execution plano-text
+    // simulation when a real transport is unavailable. Dev default ON; locked
+    // OFF in production unless explicitly enabled (and then warned). Ignored
+    // when realTransports is true.
+    allowSimulation: boolish(!isProdBuild),
     // Reserved for the Arcium MXE transport. The real encryption lifecycle is
     // NOT wired in this build, so a set endpoint does not make ArciumBackend
     // claim MPC — with realTransports=true it fails closed instead.
@@ -251,6 +259,7 @@ function load(): Env {
     },
     confidential: {
       realTransports: process.env.CONFIDENTIAL_REAL_TRANSPORTS,
+      allowSimulation: process.env.CONFIDENTIAL_ALLOW_SIMULATION,
       arciumMxeEndpoint: process.env.ARCIUM_MXE_ENDPOINT,
       enclaveEndpoint: process.env.ENCLAVE_ENDPOINT,
       enclaveQuoteRequired: process.env.ENCLAVE_QUOTE_REQUIRED,
@@ -299,6 +308,17 @@ function load(): Env {
       log.warn(
         "CONFIDENTIAL_REAL_TRANSPORTS is enabled but ENCLAVE_ENDPOINT is unset — confidential nets will fail closed (no plaintext fallback)",
       );
+    }
+    if (!cfg.confidential.realTransports) {
+      if (cfg.confidential.allowSimulation) {
+        log.warn(
+          "CONFIDENTIAL_REAL_TRANSPORTS is off and CONFIDENTIAL_ALLOW_SIMULATION is on — confidential nets run as honestly-labeled plaintext simulation (trustModel=simulated_plaintext_compute). No TEE/MPC is claimed. Wire a real transport before launch.",
+        );
+      } else {
+        log.warn(
+          "CONFIDENTIAL_REAL_TRANSPORTS is off in production — confidential nets will fail closed unless CONFIDENTIAL_ALLOW_SIMULATION=true explicitly permits an honestly-labeled plaintext simulation",
+        );
+      }
     }
   }
 

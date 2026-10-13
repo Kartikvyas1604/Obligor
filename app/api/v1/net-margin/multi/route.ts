@@ -13,6 +13,7 @@ import { nPartyNetted, type ChainId } from "@/lib/margin";
 import { makeLogger } from "@/lib/logger";
 import { computeCommitmentHash, hashLegs } from "@/lib/commitment";
 import { registerComputation } from "@/lib/computation-registry";
+import { ensureNPartyPlaintextAllowed } from "@/lib/confidential";
 
 const log = makeLogger("net-margin-multi");
 
@@ -84,6 +85,11 @@ export const POST = withApi(async ({ req }) => {
       },
     );
   }
+
+  // Production removes the plaintext default: N-party netting has no real
+  // confidential transport in this build, so it fails closed unless the
+  // operator explicitly permits an honestly-labeled plaintext computation.
+  ensureNPartyPlaintextAllowed();
 
   const books = [];
   const partyLegHashes: Record<string, string> = {};
