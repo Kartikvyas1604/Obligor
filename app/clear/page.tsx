@@ -106,7 +106,6 @@ export default function ClearPage() {
   const [apiError, setApiError] = useState<string | null>(null);
 
   const [builderModalParty, setBuilderModalParty] = useState<PartyId | null>(null);
-  const [fixtureError, setFixtureError] = useState<string | null>(null);
   const [oracleSyncing, setOracleSyncing] = useState(false);
   const [oracleSyncMessage, setOracleSyncMessage] = useState<string | null>(null);
 
