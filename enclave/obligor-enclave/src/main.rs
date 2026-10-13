@@ -39,6 +39,11 @@ pub struct EnclaveNettingRequest {
     pub session_id: String,
     pub party_a_legs: Vec<PositionLeg>,
     pub party_b_legs: Vec<PositionLeg>,
+    /// Host-supplied nonce (hex). When a real NSM attestation is produced it is
+    /// bound into the document; echoed here so the host can confirm the
+    /// transport received it even before a quote is available.
+    #[serde(default)]
+    pub nonce_hex: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -56,6 +61,9 @@ pub struct AttestationQuote {
     pub quote_hex: String,
     pub pcr0: String,
     pub measurement: String,
+    /// Echo of the caller nonce. When a real NSM quote is produced this matches
+    /// the nonce cryptographically bound inside the attestation document.
+    pub nonce_hex: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -112,6 +120,7 @@ pub fn compute_two_party_netted(
     session_id: &str,
     party_a_legs: &[PositionLeg],
     party_b_legs: &[PositionLeg],
+    nonce_hex: Option<&str>,
 ) -> EnclaveNettingResponse {
     let siloed_a = siloed_im_cents(party_a_legs);
     let siloed_b = siloed_im_cents(party_b_legs);
@@ -174,15 +183,18 @@ pub fn compute_two_party_netted(
 
     let savings = (siloed_combined - netted_combined).max(0);
 
-    // SHA256 digest of the computation inputs/outputs — proof-of-execution
-    // binding, NOT a hardware attestation. A real Nitro/Oyster NSM call
-    // replaces this once the enclave binary boots inside a real enclave VM,
-    // and `verified` flips on the HOST verifier — never hardcoded here.
-    let mut hasher = Sha256::new();
-    hasher.update(session_id.as_bytes());
-    hasher.update(siloed_combined.to_le_bytes());
-    hasher.update(netted_combined.to_le_bytes());
-    let measurement = hex::encode(hasher.finalize());
+        // SHA256 digest that binds the nonce, session, and integer outputs. This
+        // is a deterministic *computation binding*, NOT a hardware attestation.
+        // A real Nitro/Oyster NSM call replaces it once the binary boots inside a
+        // real enclave VM, and `verified` flips on the HOST verifier only after
+        // cryptographic verification of the returned COSE_Sign1 document — it is
+        // never hardcoded here.
+        let mut hasher = Sha256::new();
+        hasher.update(nonce_hex.unwrap_or("").as_bytes());
+        hasher.update(session_id.as_bytes());
+        hasher.update(siloed_combined.to_le_bytes());
+        hasher.update(netted_combined.to_le_bytes());
+        let measurement = hex::encode(hasher.finalize());
 
     EnclaveNettingResponse {
         session_id: session_id.to_string(),
@@ -203,12 +215,21 @@ pub fn compute_two_party_netted(
             quote_hex: String::new(),
             pcr0: String::new(),
             measurement,
+            nonce_hex: nonce_hex.unwrap_or("").to_string(),
         },
     }
 }
 
 static ACTIVE: AtomicUsize = AtomicUsize::new(0);
 const MAX_CONNECTIONS: usize = 128;
+
+/// AWS Nitro exposes the NSM at `/dev/nsm` inside an enclave VM. Presence of the
+/// device is necessary but NOT sufficient for a hardware claim — the host only
+/// trusts a quote after cryptographically verifying the returned COSE_Sign1
+/// document (see lib/nitro-attestation.ts). This just reports the environment.
+fn nsm_available() -> bool {
+    std::path::Path::new("/dev/nsm").exists()
+}
 
 fn main() {
     let addr = std::env::var("OBLIGOR_ENCLAVE_ADDR").unwrap_or_else(|_| "127.0.0.1:5000".to_string());
@@ -306,16 +327,24 @@ fn handle_connection(mut stream: TcpStream) {
     body.truncate(content_length);
 
     match (method, path) {
-        ("GET", "/health") => respond(
-            &mut stream,
-            200,
-            "{\"ok\":true,\"service\":\"obligor-enclave\",\"hardware_attestation_available\":false}",
-        ),
+        ("GET", "/health") => {
+            let body = format!(
+                "{{\"ok\":true,\"service\":\"obligor-enclave\",\"nsm_device_present\":{},\"hardware_attestation_available\":{}}}",
+                nsm_available(),
+                nsm_available(),
+            );
+            respond(&mut stream, 200, &body);
+        }
         ("POST", "/net") => {
             let req: Result<EnclaveNettingRequest, _> = serde_json::from_slice(&body);
             match req {
                 Ok(r) => {
-                    let resp = compute_two_party_netted(&r.session_id, &r.party_a_legs, &r.party_b_legs);
+                    let resp = compute_two_party_netted(
+                        &r.session_id,
+                        &r.party_a_legs,
+                        &r.party_b_legs,
+                        r.nonce_hex.as_deref(),
+                    );
                     match serde_json::to_string(&resp) {
                         Ok(json) => respond(&mut stream, 200, &json),
                         Err(e) => respond(
@@ -386,7 +415,7 @@ mod tests {
         // 0.15 * 100.00 = 15.00 exactly.
         let a = vec![leg("A", "BTC", 100.0, 100.0, 0.15)];
         let b = vec![leg("B", "ETH", 100.0, -100.0, 0.15)];
-        let r = compute_two_party_netted("s", &a, &b);
+        let r = compute_two_party_netted("s", &a, &b, None);
         assert_eq!(r.siloed_a_usd, 15.0);
         assert_eq!(r.siloed_b_usd, 15.0);
         assert_eq!(r.siloed_combined_usd, 30.0);
@@ -398,7 +427,7 @@ mod tests {
     fn offsets_net_within_bucket() {
         let a = vec![leg("A", "BTC", 100.0, 100.0, 0.1)];
         let b = vec![leg("B", "BTC", 100.0, -100.0, 0.1)];
-        let r = compute_two_party_netted("s", &a, &b);
+        let r = compute_two_party_netted("s", &a, &b, None);
         // Bucket nets to zero exposure → no initial margin on the netted side.
         assert_eq!(r.netted_combined_usd, 0.0);
         // Siloed each side still holds 10.00 → savings is the full 20.00.
@@ -415,8 +444,8 @@ mod tests {
             leg("A", "BTC", 100.0, 100.0, 0.15),
             leg("A", "ETH", 100.0, 100.0, 0.15),
         ];
-        let r1 = compute_two_party_netted("s", &a, &[]);
-        let r2 = compute_two_party_netted("s", &a, &[]);
+        let r1 = compute_two_party_netted("s", &a, &[], None);
+        let r2 = compute_two_party_netted("s", &a, &[], None);
         let names1: Vec<_> = r1.buckets.iter().map(|b| b.bucket.clone()).collect();
         let names2: Vec<_> = r2.buckets.iter().map(|b| b.bucket.clone()).collect();
         assert_eq!(names1, vec!["BTC".to_string(), "ETH".to_string()]);
@@ -429,15 +458,28 @@ mod tests {
             leg("A", "SMALL", 100.0, -100.0, 0.1),
             leg("A", "BIG", 100.0, 100.0, 0.5),
         ];
-        let r = compute_two_party_netted("s", &a, &[]);
+        let r = compute_two_party_netted("s", &a, &[], None);
         assert_eq!(r.buckets[0].bucket, "BIG");
         assert_eq!(r.buckets[1].bucket, "SMALL");
     }
 
     #[test]
     fn unattested_by_default() {
-        let r = compute_two_party_netted("s", &[], &[]);
+        let r = compute_two_party_netted("s", &[], &[], None);
         assert!(!r.attestation.verified);
         assert_eq!(r.attestation.provider, "none");
+        assert!(r.attestation.quote_hex.is_empty());
+    }
+
+    #[test]
+    fn nonce_is_echoed_and_bound_into_measurement() {
+        let a = vec![leg("A", "BTC", 100.0, 100.0, 0.1)];
+        let with_nonce = compute_two_party_netted("s", &a, &[], Some("deadbeef"));
+        let without = compute_two_party_netted("s", &a, &[], None);
+        // Nonce is echoed for host binding...
+        assert_eq!(with_nonce.attestation.nonce_hex, "deadbeef");
+        assert_eq!(without.attestation.nonce_hex, "");
+        // ...and participates in the deterministic measurement binding.
+        assert_ne!(with_nonce.attestation.measurement, without.attestation.measurement);
     }
 }

@@ -26,8 +26,15 @@ import {
   type NetMarginResult as BaseNetMarginResult,
   twoPartyNetted,
 } from "./margin";
+import { randomBytes } from "node:crypto";
 import { makeLogger } from "./logger";
 import { env } from "./env";
+import {
+  AWS_NITRO_ROOT_G1_DER,
+  pemToDer,
+  verifyNitroAttestation,
+  type NitroVerification,
+} from "./nitro-attestation";
 
 const log = makeLogger("confidential");
 
@@ -75,7 +82,14 @@ interface EnclaveNettingResponse {
     quote_hex: string;
     pcr0: string;
     measurement: string;
+    nonce_hex?: string;
   };
+}
+
+/** Pinned Nitro roots: operator override (PEM) or the AWS Nitro Root G1. */
+function nitroRoots(): Uint8Array[] {
+  const pem = env.confidential.enclaveRootCertPem;
+  return pem ? [pemToDer(pem)] : [AWS_NITRO_ROOT_G1_DER];
 }
 
 /** Map camelCase PositionLeg → the enclave's snake_case wire struct. */
@@ -213,6 +227,11 @@ export class EnclaveBackend implements ConfidentialBackend {
     const timestamp = new Date().toISOString();
 
     if (realTransports) {
+      // Per-run nonce: if the enclave returns a hardware quote it must bind this
+      // value, so a replayed or unrelated attestation document is rejected.
+      const nonce = randomBytes(32);
+      const nonceHex = nonce.toString("hex");
+
       const res = await fetch(`${ENCLAVE_ENDPOINT}/net`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -220,6 +239,7 @@ export class EnclaveBackend implements ConfidentialBackend {
           session_id: computationId,
           party_a_legs: bookA.legs.map(toEnclaveLeg),
           party_b_legs: bookB.legs.map(toEnclaveLeg),
+          nonce_hex: nonceHex,
         }),
         signal: AbortSignal.timeout(30_000),
       }).catch((err: unknown) => {
@@ -252,21 +272,31 @@ export class EnclaveBackend implements ConfidentialBackend {
         partyCount: 2,
       };
 
-      // Claim hardware-attested TEE ONLY when the HOST can independently verify
-      // the enclave's attestation. The enclave is untrusted: its own
-      // `verified:true` boolean is not enough. The host requires a returned
-      // quote and a measurement (and optional PCR0) matching the configured
-      // allowlist. Without a configured allowlist, TEE is never claimed.
+      // Claim hardware-attested TEE ONLY when the HOST cryptographically
+      // verifies the enclave's NSM attestation document. The enclave is
+      // untrusted: its own `verified:true` boolean is ignored. Verification
+      // checks the COSE_Sign1 signature, the certificate chain up to a pinned
+      // Nitro root, validity windows, a PCR0 allowlist, and the run nonce.
       const raw = data.attestation;
-      const expectedMeasurement = env.confidential.expectedMeasurement;
-      const expectedPcr0 = env.confidential.expectedPcr0;
-      const hostVerified =
-        Boolean(raw?.verified && raw.quote_hex) &&
-        expectedMeasurement !== "" &&
-        raw?.measurement === expectedMeasurement &&
-        (expectedPcr0 === "" || raw?.pcr0 === expectedPcr0);
+      let verification: NitroVerification = {
+        verified: false,
+        reason: "enclave returned no attestation document (quote_hex empty)",
+      };
+      if (raw?.quote_hex) {
+        let quoteBytes: Uint8Array;
+        try {
+          quoteBytes = Uint8Array.from(Buffer.from(raw.quote_hex, "hex"));
+        } catch {
+          quoteBytes = new Uint8Array(0);
+        }
+        verification = verifyNitroAttestation(quoteBytes, {
+          pcr0Allowlist: env.confidential.enclavePcr0Allowlist,
+          rootCertDer: nitroRoots(),
+          expectedNonce: nonce,
+        });
+      }
 
-      if (hostVerified && raw) {
+      if (verification.verified && raw) {
         return {
           ...remote,
           backend: "enclave",
@@ -276,9 +306,9 @@ export class EnclaveBackend implements ConfidentialBackend {
           attestation: {
             quote: raw.quote_hex,
             verified: true,
-            provider: (raw.provider as AttestationQuote["provider"]) ?? "none",
+            provider: (raw.provider as AttestationQuote["provider"]) ?? "nitro",
             timestamp,
-            pcr0: raw.pcr0,
+            pcr0: raw.pcr0 ?? verification.pcr0,
             enclaveMeasurement: raw.measurement,
           },
         };
@@ -286,13 +316,13 @@ export class EnclaveBackend implements ConfidentialBackend {
 
       if (env.confidential.enclaveQuoteRequired) {
         throw new Error(
-          "Enclave returned no host-verifiable hardware attestation and ENCLAVE_QUOTE_REQUIRED is set — failing closed, not claiming TEE",
+          `Enclave attestation failed host verification (${verification.reason}) and ENCLAVE_QUOTE_REQUIRED is set — failing closed, not claiming TEE`,
         );
       }
 
       log.warn("enclave transport executed without a host-verifiable hardware attestation", {
         computationId,
-        enclaveClaimedVerified: Boolean(raw?.verified),
+        reason: verification.reason,
       });
       return {
         ...remote,
@@ -300,9 +330,7 @@ export class EnclaveBackend implements ConfidentialBackend {
         trustModel: "simulated_plaintext_compute",
         computationId,
         timestamp,
-        simulationNote: raw?.verified
-          ? "Real enclave transport reported an attestation, but the host could not verify it (no matching ENCLAVE_EXPECTED_MEASUREMENT/PCR0 allowlist) — TEE is not claimed. trustModel conservatively reports simulated_plaintext_compute."
-          : "Executed over the real enclave transport (ENCLAVE_ENDPOINT), but no hardware attestation quote was returned — TEE is not claimed. trustModel conservatively reports simulated_plaintext_compute.",
+        simulationNote: `Executed over the real enclave transport (ENCLAVE_ENDPOINT), but no host-verifiable hardware attestation was produced: ${verification.reason}. TEE is not claimed. trustModel conservatively reports simulated_plaintext_compute.`,
       };
     }
 

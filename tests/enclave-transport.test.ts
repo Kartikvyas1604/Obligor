@@ -2,19 +2,37 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { createTestAttestor } from "./nitro-fixtures";
+
+const attestor = createTestAttestor();
 
 // Real-transport mode is read at module load, so set it BEFORE the dynamic
 // import below. node:test runs each file in its own process, so this cannot
 // leak into other tests.
 process.env.CONFIDENTIAL_REAL_TRANSPORTS = "true";
-// Host-side allowlist: TEE is only claimed when the host can match the
-// enclave's returned measurement against this value.
-process.env.ENCLAVE_EXPECTED_MEASUREMENT = "m";
+// Host-side trust anchors: TEE is claimed only when the host can verify a
+// Nitro quote chaining to this pinned root AND whose PCR0 is allowlisted.
+process.env.ENCLAVE_ROOT_CERT_PEM = attestor.certPem;
+process.env.ENCLAVE_PCR0_ALLOWLIST = attestor.pcr0Hex;
 
-let mode: "unattested" | "attested" | "spoofed" = "unattested";
+let mode: "unattested" | "valid" | "tampered" = "unattested";
+let lastNonce: Uint8Array = new Uint8Array(32);
 
 function enclavePayload() {
-  const measurement = mode === "spoofed" ? "attacker-measurement" : "m";
+  let attestation: Record<string, unknown>;
+  if (mode === "unattested") {
+    attestation = { provider: "none", verified: false, quote_hex: "", pcr0: "", measurement: "m" };
+  } else {
+    const quote = attestor.makeQuote(lastNonce, { tamperSig: mode === "tampered" });
+    attestation = {
+      provider: "nitro",
+      verified: false,
+      quote_hex: Buffer.from(quote).toString("hex"),
+      pcr0: attestor.pcr0Hex,
+      measurement: "m",
+      nonce_hex: Buffer.from(lastNonce).toString("hex"),
+    };
+  }
   return {
     session_id: "smoke",
     siloed_a_usd: 9940,
@@ -25,10 +43,7 @@ function enclavePayload() {
     gross_notional_usd: 198800,
     net_exposure_usd: 0,
     buckets: [{ bucket: "SOL", exposure_usd: 0, haircut: 0.15, im_usd: 0 }],
-    attestation:
-      mode === "unattested"
-        ? { provider: "none", verified: false, quote_hex: "", pcr0: "", measurement }
-        : { provider: "nitro", verified: true, quote_hex: "deadbeef", pcr0: "pcr0", measurement },
+    attestation,
   };
 }
 
@@ -81,8 +96,20 @@ const bookB = {
 async function startFakeEnclave(): Promise<{ server: Server; url: string }> {
   const server = createServer((req, res) => {
     if (req.method === "POST" && req.url === "/net") {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(enclavePayload()));
+      const chunks: Buffer[] = [];
+      req.on("data", (c: Buffer) => chunks.push(c));
+      req.on("end", () => {
+        try {
+          const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+          if (typeof body?.nonce_hex === "string") {
+            lastNonce = new Uint8Array(Buffer.from(body.nonce_hex, "hex"));
+          }
+        } catch {
+          lastNonce = new Uint8Array(32);
+        }
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(enclavePayload()));
+      });
       return;
     }
     res.writeHead(404).end();
@@ -107,26 +134,26 @@ test("enclave real transport: consumes remote numbers and maps attestation hones
   assert.equal(sim.buckets[0]?.bucket, "SOL");
   assert.equal(sim.trustModel, "simulated_plaintext_compute");
   assert.equal(sim.attestation, undefined);
-  assert.match(sim.simulationNote ?? "", /no hardware attestation quote/i);
+  assert.match(sim.simulationNote ?? "", /no host-verifiable hardware attestation/i);
 
-  // 2) enclave CLAIMS verified but its measurement does not match the host
-  //    allowlist → the untrusted boolean is ignored, TEE is NOT claimed.
-  mode = "spoofed";
+  // 2) enclave returns a quote that FAILS host verification (tampered COSE
+  //    signature) → the untrusted self-report is ignored, TEE is NOT claimed.
+  mode = "tampered";
   const spoofed = await backend.netTwoParty(bookA, bookB);
   assert.equal(spoofed.trustModel, "simulated_plaintext_compute");
   assert.equal(spoofed.attestation, undefined);
-  assert.match(spoofed.simulationNote ?? "", /could not verify/i);
+  assert.match(spoofed.simulationNote ?? "", /does not verify/i);
 
-  // 3) enclave responds WITH a verified quote whose measurement matches the
-  //    host allowlist → hardware_attested_tee + attestation.
-  mode = "attested";
+  // 3) enclave returns a genuine quote slotted to the per-run nonce, chaining
+  //    to the pinned root with an allowlisted PCR0 → hardware_attested_tee.
+  mode = "valid";
   const att = await backend.netTwoParty(bookA, bookB);
   assert.equal(att.trustModel, "hardware_attested_tee");
   assert.equal(att.attestation?.verified, true);
-  assert.equal(att.attestation?.quote, "deadbeef");
   assert.equal(att.attestation?.provider, "nitro");
 
   // 4) transport unreachable → fail closed (never silently simulate).
+  server.closeAllConnections();
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await assert.rejects(() => backend.netTwoParty(bookA, bookB), /unreachable/i);
 });

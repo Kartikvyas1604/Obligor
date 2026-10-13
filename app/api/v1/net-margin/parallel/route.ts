@@ -143,7 +143,7 @@ export const POST = withApi(async ({ req }) => {
     executionDurationMs,
     pairs,
     attestation: attestation
-      ? { ...attestation, note: "Host-verified hardware attestation: the enclave's measurement matched the configured allowlist (ENCLAVE_EXPECTED_MEASUREMENT)." }
+      ? { ...attestation, note: "Host-verified hardware attestation: the enclave's Nitro NSM document passed signature, pinned-root, PCR0 (ENCLAVE_PCR0_ALLOWLIST) and nonce checks." }
       : null,
     differentiator:
       "Parallel multi-pair clearing: Monad throughput nets N desk pairs concurrently per epoch. TEE ≠ MPC — trust model labeled honestly.",

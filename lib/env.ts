@@ -158,11 +158,17 @@ const envSchema = z.object({
     enclaveQuoteRequired: boolish(false),
     // Host-side attestation verification inputs. The enclave is untrusted: a
     // `verified:true` boolean it returns is NOT sufficient to claim TEE. The
-    // host only claims hardware_attested_tee when it can independently match the
-    // returned measurement (and, if set, PCR0) against these allowlists. Left
-    // empty, TEE is never claimed (conservative).
-    expectedMeasurement: z.string().optional().default(""),
-    expectedPcr0: z.string().optional().default(""),
+    // host verifies the COSE_Sign1 NSM document cryptographically (signature,
+    // pinned-root chain, validity windows, PCR0, nonce) and only then claims
+    // hardware_attested_tee. Left empty, TEE is never claimed (conservative).
+    enclavePcr0Allowlist: z
+      .string()
+      .optional()
+      .default("")
+      .transform((s) => s.split(",").map((x) => x.trim()).filter(Boolean)),
+    // Override the pinned Nitro root certificate (PEM). Defaults to the AWS
+    // Nitro Enclaves Root G1.
+    enclaveRootCertPem: z.string().optional().default(""),
   }),
 
   escrow: z.object({
@@ -248,8 +254,8 @@ function load(): Env {
       arciumMxeEndpoint: process.env.ARCIUM_MXE_ENDPOINT,
       enclaveEndpoint: process.env.ENCLAVE_ENDPOINT,
       enclaveQuoteRequired: process.env.ENCLAVE_QUOTE_REQUIRED,
-      expectedMeasurement: process.env.ENCLAVE_EXPECTED_MEASUREMENT,
-      expectedPcr0: process.env.ENCLAVE_EXPECTED_PCR0,
+      enclavePcr0Allowlist: process.env.ENCLAVE_PCR0_ALLOWLIST,
+      enclaveRootCertPem: process.env.ENCLAVE_ROOT_CERT_PEM,
     },
     escrow: {
       realSettle: process.env.ESCROW_REAL_SETTLE,
