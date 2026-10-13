@@ -64,4 +64,5 @@ programs/**/*-keypair.json
 test-ledger/
 .ledger/
 
-docs/
+# ---- docs are versioned on purpose (specs, audit, architecture) ----
+!docs/
