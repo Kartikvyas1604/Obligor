@@ -350,12 +350,12 @@ export default function ClearPage() {
           ))}
         </div>
 
-        {(computeError || fixtureError || apiError) && (
+        {(computeError || apiError) && (
           <div role="alert" className="flex items-start gap-3 rounded-2xl border border-destructive/40 bg-destructive/5 p-4">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden />
             <div className="text-sm">
               <p className="font-semibold text-destructive">Something needs your attention</p>
-              <p className="mt-1 text-muted-foreground">{computeError ?? fixtureError ?? apiError}</p>
+              <p className="mt-1 text-muted-foreground">{computeError ?? apiError}</p>
             </div>
           </div>
         )}
