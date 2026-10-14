@@ -99,7 +99,7 @@ export default function DealLauncherPage() {
               <label htmlFor="desk-wallet" className="text-xs font-semibold text-muted-foreground">
                 Your wallet address
               </label>
-              <WalletConnect onConnect={(addr) => setWallet(addr)} />
+              <WalletConnect chain={chain} onConnect={(addr) => setWallet(addr)} />
             </div>
             <input
               id="desk-wallet"

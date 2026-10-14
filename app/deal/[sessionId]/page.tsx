@@ -8,9 +8,12 @@ import { MarginHero } from "@/components/margin-hero";
 import { PositionBuilderModal } from "@/components/position-builder-modal";
 import { EscrowVaultCard } from "@/components/escrow-vault-card";
 import { ExposureBars } from "@/components/charts";
+import { WalletConnect } from "@/components/wallet-connect";
 import { getPartyTokens, setPartyTokens } from "@/lib/client-party-tokens";
 import { type DealSession } from "@/lib/deal-session";
 import { type PositionLeg, type PartyId, usd, siloedIm } from "@/lib/margin";
+import { legsCommitment, sealMessage } from "@/lib/seal";
+import { signSealMessage, WalletSignError } from "@/lib/wallet-sign";
 
 
 
@@ -41,6 +44,8 @@ export default function LiveDealPage({
   const [joinError, setJoinError] = useState<string | null>(null);
   const [sealError, setSealError] = useState<string | null>(null);
   const [clearError, setClearError] = useState<string | null>(null);
+  // Wallet connected in this browser, used to join as Desk B and to sign seals.
+  const [wallet, setWallet] = useState<string>("");
 
   // Poll session every 1.5 seconds for true real-time multi-device sync.
   // The request presents this desk's capability token; without it the server
@@ -76,6 +81,11 @@ export default function LiveDealPage({
   }, [sessionId, myRole]);
 
   async function handleJoinAsPartyB() {
+    setJoinError(null);
+    if (!wallet.trim()) {
+      setJoinError("Connect your wallet first — a desk wallet is required to join and to sign the seal.");
+      return;
+    }
     setActionBusy(true);
     try {
       const res = await fetch(`/api/v1/sessions/${sessionId}`, {
@@ -83,8 +93,8 @@ export default function LiveDealPage({
         headers: partyHeaders(),
         body: JSON.stringify({
           action: "join",
-          // Counterparty wallet must be provided by the connecting party
-          walletB: "",
+          // Counterparty wallet is the one connected in this browser.
+          walletB: wallet.trim(),
           labelB: "Desk B (Counterparty)",
           legsB: [],
         }),
@@ -139,21 +149,33 @@ export default function LiveDealPage({
   }
 
   async function handleSealBook() {
+    if (!session || !myParty) return;
     setActionBusy(true);
     setSealError(null);
     try {
-      // Faithful demo seal: derives a fresh digest of the leg book (never a
-      // fabricated transaction). The real seal comes from wallet signature.
-      const digest = await crypto.subtle.digest(
-        "SHA-256",
-        new TextEncoder().encode(JSON.stringify(myParty?.legs ?? [])),
-      );
-      const signature = "sig_" + Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+      const chain = session.chain;
+      // Rebuild the exact canonical message the server will verify: it commits
+      // to this session, this desk, the chain, and this desk's book.
+      const message = sealMessage({
+        sessionId,
+        partyId: myRole,
+        chain,
+        book: legsCommitment(myParty.legs),
+      });
+      let signature: string;
+      try {
+        signature = await signSealMessage(chain, message);
+      } catch (err) {
+        setSealError(
+          err instanceof WalletSignError ? err.message : "Wallet signing was rejected or failed.",
+        );
+        return;
+      }
       const token = getPartyTokens(sessionId)[myRole];
       const res = await fetch(`/api/v1/sessions/${sessionId}`, {
         method: "POST",
         headers: partyHeaders(token ? { "x-party-token": token } : undefined),
-        body: JSON.stringify({ action: "seal", partyId: myRole, signature }),
+        body: JSON.stringify({ action: "seal", partyId: myRole, signature, chain }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { message?: string } | null;
@@ -239,8 +261,14 @@ export default function LiveDealPage({
             </h1>
           </div>
 
-          {/* Role Indicator & Test Switcher */}
+          {/* Wallet & Role Indicator */}
           <div className="flex items-center gap-2">
+            <WalletConnect
+              chain={session.chain}
+              label={session.chain === "monad" ? "Connect EVM wallet" : "Connect Solana wallet"}
+              onConnect={(addr) => setWallet(addr)}
+              onDisconnect={() => setWallet("")}
+            />
             <span className="text-xs text-muted-foreground font-mono">Viewing as:</span>
             <div className="inline-flex rounded-full border border-border bg-card p-0.5">
               {(["A", "B"] as const).map((role) => (
@@ -306,12 +334,12 @@ export default function LiveDealPage({
               {!session.partyB && (
                 <button
                   type="button"
-                  disabled={actionBusy}
+                  disabled={actionBusy || !wallet}
                   onClick={handleJoinAsPartyB}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:bg-foreground transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:bg-foreground transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50 disabled:pointer-events-none"
                 >
                   <Plus className="h-3.5 w-3.5" aria-hidden />
-                  <span>Simulate Desk B joining</span>
+                  <span>Join as Desk B</span>
                 </button>
               )}
             </div>
@@ -360,8 +388,9 @@ export default function LiveDealPage({
                       <p className="text-xs text-muted-foreground">Desk {role} has not joined yet.</p>
                       <button
                         type="button"
+                        disabled={!wallet}
                         onClick={handleJoinAsPartyB}
-                        className="rounded-full border border-border bg-secondary px-4 py-1.5 text-xs text-foreground hover:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="rounded-full border border-border bg-secondary px-4 py-1.5 text-xs text-foreground hover:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:pointer-events-none"
                       >
                         Join as Desk {role}
                       </button>
@@ -455,15 +484,27 @@ export default function LiveDealPage({
 
           <div className="flex flex-wrap items-center gap-3">
             {myParty && !myParty.isSealed && (
-              <button
-                type="button"
-                disabled={actionBusy}
-                onClick={handleSealBook}
-                className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-6 py-3 text-xs font-bold text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-              >
-                <Lock className="h-4 w-4" aria-hidden />
-                <span>Seal my book (Desk {myRole})</span>
-              </button>
+              <div className="flex flex-col items-end gap-1">
+                <button
+                  type="button"
+                  disabled={actionBusy || !wallet}
+                  onClick={handleSealBook}
+                  className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-6 py-3 text-xs font-bold text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:pointer-events-none"
+                >
+                  <Lock className="h-4 w-4" aria-hidden />
+                  <span>Sign &amp; seal my book (Desk {myRole})</span>
+                </button>
+                <span className="text-[11px] font-mono text-muted-foreground">
+                  {!wallet
+                    ? "Connect your wallet to seal"
+                    : myParty.wallet &&
+                        (session.chain === "monad"
+                          ? wallet.toLowerCase() !== myParty.wallet.toLowerCase()
+                          : wallet !== myParty.wallet)
+                      ? "Connected wallet does not match this desk's wallet"
+                      : "Signs with your connected wallet"}
+                </span>
+              </div>
             )}
 
             {myParty?.isSealed && (

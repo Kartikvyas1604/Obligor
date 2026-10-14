@@ -18,6 +18,8 @@ import {
   verifyPartyToken,
 } from "@/lib/deal-session";
 import { priceAndNormalizeLegs } from "@/lib/positions";
+import { legsCommitment, sealMessage } from "@/lib/seal";
+import { verifySeal } from "@/lib/seal-verify";
 import { walletSchema } from "@/lib/contracts";
 import { dealEscrowRelease } from "@/lib/deal-session";
 import type { PositionLeg, PartyId } from "@/lib/margin";
@@ -39,7 +41,9 @@ const postSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("seal"),
     partyId: z.enum(["A", "B"]),
-    signature: z.string().min(8).max(512).optional(),
+    /** Wallet signature over the canonical seal message (base58 or 0x-hex). */
+    signature: z.string().min(8).max(512),
+    chain: z.enum(["solana", "monad"]).optional(),
   }),
   z.object({ action: z.literal("clear") }),
   z.object({
@@ -140,6 +144,31 @@ export const POST = withApi<{ sessionId: string }>(async ({ req, params }) => {
 
     case "seal": {
       requireParty(session, body.partyId, tokenHeader);
+      const party = body.partyId === "A" ? session.partyA : session.partyB;
+      if (!party) throw ApiError.badRequest("Cannot seal: party has not joined");
+
+      // A seal is the desk's own wallet signature over a canonical message that
+      // commits to the session, the party, the chain, and that desk's book.
+      // The server re-derives the message and verifies it against the wallet —
+      // a placeholder string can never pass.
+      const chain = body.chain ?? session.chain;
+      const wallet = party.wallet?.trim() ?? "";
+      if (!wallet || wallet.length < 32) {
+        throw ApiError.badRequest(
+          "Seal requires this desk's wallet — set a wallet for the party before sealing",
+        );
+      }
+      const message = sealMessage({
+        sessionId,
+        partyId: body.partyId,
+        chain,
+        book: legsCommitment(party.legs),
+      });
+      const verification = verifySeal({ chain, wallet, message, signature: body.signature });
+      if (!verification.valid) {
+        throw new ApiError(400, "SEAL_SIGNATURE_INVALID", `Seal rejected: ${verification.reason}`);
+      }
+
       const updated = sealPartyBook(sessionId, body.partyId, body.signature);
       if (!updated) throw ApiError.badRequest("Cannot seal: party has not joined");
       return notModified(publicSession(updated, authorizedParties(updated, tokenHeader)));
