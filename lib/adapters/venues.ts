@@ -16,12 +16,18 @@ export interface VenueInfo {
 
 export const VENUES: Record<Venue, VenueInfo> = {
   drift: { label: "Drift Protocol (perps)" },
-  kamino: { label: "Kamino Lend" },
+  kamino: {
+    label: "Kamino Lend",
+    note: "Live read via the official Kamino public Portfolio API (KAMINO_AUTHORITY); marks anchored to Pyth. Unconfigured reads are desk-declared, not venue-verified.",
+  },
   mock_equity: {
     label: "Tokenized equity (tAAPL)",
     note: "Mock SPL equity priced from the live Pyth AAPL mark. Adapter-ready for xStocks/Backed rails — analytics never custody.",
   },
-  monad_fixture: { label: "Monad fixture venue" },
+  monad_fixture: {
+    label: "Monad on-chain (EVM)",
+    note: "Live read via Monad JSON-RPC (MONAD_RPC_URL + MONAD_AUTHORITY + MONAD_TOKEN_MAP); token balances priced from Pyth. Unconfigured reads are desk-declared, not venue-verified.",
+  },
   manual: { label: "Manually entered" },
 };
 

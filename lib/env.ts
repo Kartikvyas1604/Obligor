@@ -142,6 +142,26 @@ const envSchema = z.object({
     subAccountCacheMs: positiveInt(30_000),
   }),
 
+  kamino: z.object({
+    // Mainnet wallet (base58) whose Kamino obligations are read for verification.
+    // When unset, Kamino legs are honestly reported desk-declared/unverified.
+    authority: z.string().optional().default(""),
+    // Official Kamino public API (self-hostable/proxyable). No API key required.
+    dataApiBase: z.string().optional().default("https://api.kamino.finance"),
+    cacheMs: positiveInt(30_000),
+  }),
+
+  monad: z.object({
+    // EVM JSON-RPC for reading on-chain Monad state. Defaults to the public
+    // Monad testnet; set MONAD_RPC_URL for mainnet or a dedicated provider.
+    rpcUrl: z.string().optional().default("https://testnet-rpc.monad.xyz"),
+    // Wallet whose on-chain token balances are read for verification.
+    authority: z.string().optional().default(""),
+    // Optional JSON map { bucket: tokenAddress } (ERC-20 / vault) whose
+    // on-chain balanceOf is read and priced to bucket USD.
+    tokenMap: z.string().optional().default(""),
+  }),
+
   confidential: z.object({
     // When true, the confidential backends MUST carry a real transport; a
     // missing/unsupported wire fails closed instead of silently simulating.
@@ -256,6 +276,16 @@ function load(): Env {
       subAccountId: process.env.DRIFT_SUBACCOUNT_ID,
       dataApiBase: process.env.DRIFT_DATA_API_BASE,
       subAccountCacheMs: process.env.DRIFT_SUBACCOUNT_CACHE_MS,
+    },
+    kamino: {
+      authority: process.env.KAMINO_AUTHORITY,
+      dataApiBase: process.env.KAMINO_DATA_API_BASE,
+      cacheMs: process.env.KAMINO_CACHE_MS,
+    },
+    monad: {
+      rpcUrl: process.env.MONAD_RPC_URL,
+      authority: process.env.MONAD_AUTHORITY,
+      tokenMap: process.env.MONAD_TOKEN_MAP,
     },
     confidential: {
       realTransports: process.env.CONFIDENTIAL_REAL_TRANSPORTS,

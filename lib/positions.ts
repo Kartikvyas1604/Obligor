@@ -16,6 +16,8 @@ import { env } from "./env";
 import { fetchLivePythPrice, type OraclePrice } from "./adapters/pyth";
 import { BUCKET_ORACLE_SYMBOL } from "./adapters/venues";
 import { fetchDriftSubAccount, PERP_INSTRUMENT_FOR_BUCKET } from "./adapters/drift";
+import { fetchKaminoPortfolio } from "./adapters/kamino";
+import { fetchMonadExposure } from "./adapters/monad";
 import { makeLogger } from "./logger";
 import { ApiError } from "./http";
 
@@ -240,7 +242,12 @@ export async function priceAndNormalizeLegs(
   return { legs, warnings, priceSources, marksApplied };
 }
 
-/** Validate + price legs, then add venue (Drift) verification annotations. */
+/**
+ * Validate + price legs, then add venue verification annotations for every
+ * venue that has a real read path (Drift perps, Kamino Lend, Monad EVM).
+ * Each annotation is loud about its provenance and never substitutes venue
+ * data for the desk's own claim.
+ */
 export async function priceAndNormalizeLegsWithVenueCheck(
   party: NettingPartyId,
   rawLegs: unknown,
@@ -248,6 +255,8 @@ export async function priceAndNormalizeLegsWithVenueCheck(
 ): Promise<PricedBook> {
   const priced = await priceAndNormalizeLegs(party, rawLegs, options);
   await driftVenueAnnotations(priced.legs, priced.warnings);
+  await kaminoVenueAnnotations(priced.legs, priced.warnings);
+  await monadVenueAnnotations(priced.legs, priced.warnings);
   return priced;
 }
 
@@ -321,6 +330,112 @@ async function driftVenueAnnotations(
   }
 }
 
+/** Per-bucket desk claim for one venue: absolute USD per bucket + side. */
+function deskBucketClaim(legs: PositionLeg[], venue: PositionLeg["venue"]) {
+  const venueLegs = legs.filter((l) => l.venue === venue);
+  const usdByBucket = new Map<string, number>();
+  const signedByBucket = new Map<string, number>();
+  for (const l of venueLegs) {
+    usdByBucket.set(l.bucket, (usdByBucket.get(l.bucket) ?? 0) + Math.abs(l.signedExposureUsd));
+    signedByBucket.set(l.bucket, (signedByBucket.get(l.bucket) ?? 0) + l.signedExposureUsd);
+  }
+  return { venueLegs, usdByBucket, signedByBucket };
+}
+
+/**
+ * Venue provenance for Kamino legs. Real read path with loud degradation:
+ * - KAMINO_AUTHORITY unset → honest "desk-declared, unverified" annotation.
+ * - Portfolio API unreachable → advisory warning, compute proceeds as an
+ *   internal simulation (never silently substitutes venue data).
+ * - Portfolio read → per-bucket net exposure match/mismatch vs the desk book.
+ */
+async function kaminoVenueAnnotations(legs: PositionLeg[], warnings: string[]): Promise<void> {
+  const { venueLegs, signedByBucket } = deskBucketClaim(legs, "kamino");
+  if (venueLegs.length === 0) return;
+
+  if (!env.kamino.authority) {
+    warnings.push(
+      "venue kamino: no portfolio linked (KAMINO_AUTHORITY unset) — exposure is desk-declared, not venue-verified",
+    );
+    return;
+  }
+
+  try {
+    const pf = await fetchKaminoPortfolio();
+    const buckets = new Set([...signedByBucket.keys(), ...Object.keys(pf.bucketExposure)]);
+    for (const bucket of buckets) {
+      const deskUsd = signedByBucket.get(bucket) ?? 0;
+      const onchainUsd = pf.bucketExposure[bucket] ?? 0;
+      const tolerance = Math.max(20, Math.abs(deskUsd) * 0.05);
+      if (Math.abs(onchainUsd - deskUsd) <= tolerance) {
+        log.info("kamino venue match", { bucket, deskUsd, onchainUsd });
+      } else {
+        warnings.push(
+          `venue kamino: mismatch on ${bucket} — desk declares ${deskUsd.toFixed(0)} USD net, Kamino shows ${onchainUsd.toFixed(0)} USD net`,
+        );
+      }
+    }
+    if (pf.unmappedSymbols.length > 0) {
+      warnings.push(
+        `venue kamino: on-chain symbols not mapped to a risk bucket (${pf.unmappedSymbols.join(", ")}) — omitted from verification`,
+      );
+    }
+    warnings.push(
+      `venue kamino: verified against the public Portfolio API for ${pf.authority.slice(0, 6)}…${pf.authority.slice(-4)} (${pf.obligations.length} obligation(s))`,
+    );
+  } catch (err) {
+    warnings.push(
+      `venue kamino: ${err instanceof Error ? err.message : String(err)} — net proceeds as internal simulation`,
+    );
+  }
+}
+
+/**
+ * Venue provenance for Monad (EVM) legs. Real on-chain read with loud
+ * degradation: MONAD_AUTHORITY + MONAD_TOKEN_MAP unset → desk-declared;
+ * RPC unreachable → warning; balances read → per-bucket exposure match.
+ */
+async function monadVenueAnnotations(legs: PositionLeg[], warnings: string[]): Promise<void> {
+  const { venueLegs, usdByBucket } = deskBucketClaim(legs, "monad_fixture");
+  if (venueLegs.length === 0) return;
+
+  if (!env.monad.authority || !env.monad.tokenMap) {
+    warnings.push(
+      "venue monad: no on-chain account linked (MONAD_AUTHORITY/MONAD_TOKEN_MAP unset) — exposure is desk-declared, not venue-verified",
+    );
+    return;
+  }
+
+  try {
+    const ex = await fetchMonadExposure();
+    const buckets = new Set([...usdByBucket.keys(), ...Object.keys(ex.bucketExposure)]);
+    for (const bucket of buckets) {
+      const deskUsd = usdByBucket.get(bucket) ?? 0;
+      const onchainUsd = ex.bucketExposure[bucket] ?? 0;
+      const tolerance = Math.max(20, deskUsd * 0.05);
+      if (Math.abs(onchainUsd - deskUsd) <= tolerance) {
+        log.info("monad venue match", { bucket, deskUsd, onchainUsd });
+      } else {
+        warnings.push(
+          `venue monad: mismatch on ${bucket} — desk declares ${deskUsd.toFixed(0)} USD, chain shows ${onchainUsd.toFixed(0)} USD`,
+        );
+      }
+    }
+    if (ex.unpriceableBuckets.length > 0) {
+      warnings.push(
+        `venue monad: buckets without a live Pyth feed (${ex.unpriceableBuckets.join(", ")}) — sized at 0 USD, not verified`,
+      );
+    }
+    warnings.push(
+      `venue monad: verified on-chain at block ${ex.chain.blockNumber} (chain ${ex.chain.chainId}) for ${ex.authority.slice(0, 8)}…`,
+    );
+  } catch (err) {
+    warnings.push(
+      `venue monad: ${err instanceof Error ? err.message : String(err)} — net proceeds as internal simulation`,
+    );
+  }
+}
+
 /**
  * Strip position-revealing detail from warnings before returning them from a
  * confidential (aggregate-only) endpoint. Deviation/desk-mark messages embed a
@@ -332,7 +447,11 @@ export function confidentialSafeWarnings(warnings: string[]): string[] {
     (w) =>
       !/Supplied mark/i.test(w) &&
       !/desk-supplied mark/i.test(w) &&
-      !/deviates/i.test(w),
+      !/deviates/i.test(w) &&
+      // Venue mismatch messages embed the desk's own claimed exposure.
+      !/desk declares/i.test(w) &&
+      !/desk exposure/i.test(w) &&
+      !/mismatch on/i.test(w),
   );
 }
 
