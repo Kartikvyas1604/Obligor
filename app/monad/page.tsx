@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   CheckCircle2,
   LoaderCircle,
@@ -8,23 +8,27 @@ import {
   ShieldAlert,
   RotateCcw,
   Zap,
+  Upload,
 } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { FreedCapitalColumns, PairCompareBars } from "@/components/charts";
-import { type PositionBook, type NetMarginResult, siloedIm } from "@/lib/margin";
+import { type PositionLeg, type NetMarginResult, siloedIm } from "@/lib/margin";
 
-const EPOCH_STAGES = [
-  "Sealing desk pairs into enclave envelopes",
-  "Scheduling the concurrent batch",
-  "Netting 3+ desk pairs simultaneously",
-  "Checking enclave attestation metadata (claimed only when present)",
-];
+type ImportedLeg = PositionLeg;
 
-interface DemoPair {
+interface ImportedDesk {
+  wallet: string;
+  chain?: string;
+  legs: ImportedLeg[];
+  parallelLegs: Array<Pick<PositionLeg, "venue" | "instrument" | "bucket" | "side" | "qty" | "markUsd">>;
+}
+
+interface ImportedPair {
   pairId: string;
   label: string;
-  a: PositionBook;
-  b: PositionBook;
+  warnings?: string[];
+  a: ImportedDesk;
+  b: ImportedDesk;
 }
 
 interface EpochPairResult {
@@ -49,17 +53,34 @@ interface EpochResponse {
   message?: string;
 }
 
+interface ImportError {
+  row: number;
+  message: string;
+}
+
+const EXAMPLE_CSV = `pair,desk,wallet,venue,instrument,bucket,side,qty,markUsd
+p1,A,9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM,manual,MON lend,MON,lend,70000,1
+p1,B,3BhLGpKkfirMtcC7LEmVAZ3f9sv5VMspD6MKAtd1Wq6aY,manual,MON-PERP,MON,short,75000,1
+p2,A,Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS,manual,ETH long,ETH,long,20,1
+p2,B,5yzwEtvhBAoVJZaWuN9MbJz2s34m5Nz3ZMiWDAfP8wkr,manual,ETH-PERP,ETH,short,20,1
+p3,A,HpNfVwyTLPBmE8ibJvfFsVSCEjdE9ZjtFRennis9fPb,manual,tAAPL,AAPL,long,220,1
+p3,B,8Kq1mBDtMJVYVf1fPtrC8q1cx4PzmpKvx64h3FsYytX,manual,tAAPL short,AAPL,short,220,1`;
+
 /**
- * Monad parallel clearing screen. Pairs come from the gated demo endpoint,
- * netting happens on the server (where the enclave backend lives), and every
- * failure mode has an honest error state with retry.
+ * Monad parallel clearing screen. Desk pairs arrive from a real blotter upload
+ * (CSV/JSON), are oracle-priced server-side, then netted concurrently in one
+ * enclave epoch. There are no preloaded fixtures and no simulated progress —
+ * the busy state is backed by the actual epoch request.
  */
 export default function MonadPage() {
+  const [text, setText] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importRowErrors, setImportRowErrors] = useState<ImportError[]>([]);
+  const [pairs, setPairs] = useState<ImportedPair[]>([]);
+
   const [epoch, setEpoch] = useState<"idle" | "running" | "done" | "error">("idle");
-  const [stage, setStage] = useState(-1);
   const [stageError, setStageError] = useState<string | null>(null);
-  const [demoError, setDemoError] = useState<string | null>(null);
-  const [pairs, setPairs] = useState<DemoPair[]>([]);
   const [pairResults, setPairResults] = useState<Map<string, EpochPairResult>>(new Map());
   const [epochDurationMs, setEpochDurationMs] = useState<number | null>(null);
   const [attestationNote, setAttestationNote] = useState<string | null>(null);
@@ -67,92 +88,64 @@ export default function MonadPage() {
   const [attestationVerified, setAttestationVerified] = useState<boolean | null>(null);
   const [epochId, setEpochId] = useState<string | null>(null);
 
-  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const timers = timersRef.current;
-    return () => timers.forEach(clearTimeout);
-  }, []);
+  async function handleFile(file: File | null) {
+    if (!file) return;
+    const content = await file.text();
+    setText(content);
+  }
 
-  async function loadDemoPairs(): Promise<DemoPair[] | null> {
-    const res = await fetch("/api/v1/demo/fixture-parallel-pairs", { method: "POST" });
-    if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { message?: string } | null;
-      setDemoError(body?.message ?? `Demo endpoint returned ${res.status}`);
-      return null;
+  async function importBatch() {
+    setImporting(true);
+    setImportError(null);
+    setImportRowErrors([]);
+    try {
+      const res = await fetch("/api/v1/positions/import-pairs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format: "auto", chain: "monad", data: text }),
+      });
+      const body = (await res.json().catch(() => null)) as
+        | { message?: string; errors?: ImportError[]; pairs?: ImportedPair[] }
+        | null;
+      if (!res.ok) {
+        setImportError(body?.message ?? `Import failed (${res.status})`);
+        setImportRowErrors(body?.errors ?? []);
+        return;
+      }
+      setPairs(body?.pairs ?? []);
+      setEpoch("idle");
+      setPairResults(new Map());
+      setEpochDurationMs(null);
+      setAttestationNote(null);
+      setAttestationQuote(null);
+      setAttestationVerified(null);
+      setEpochId(null);
+    } catch {
+      setImportError("Network error — the batch never reached the server");
+    } finally {
+      setImporting(false);
     }
-    const data = (await res.json()) as { pairs: DemoPair[] };
-    setDemoError(null);
-    setPairs(data.pairs);
-    return data.pairs;
   }
-
-  async function preloadPairs() {
-    setEpoch("running");
-    setStage(0);
-    setStageError(null);
-    await loadDemoPairs();
-    setEpoch("idle");
-  }
-
-  useEffect(() => {
-    const t = setTimeout(() => void preloadPairs(), 0);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   async function computeEpoch() {
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
-
     setStageError(null);
     setEpoch("running");
-    setStage(0);
     setPairResults(new Map());
     setEpochDurationMs(null);
 
-    EPOCH_STAGES.forEach((_, i) =>
-      timersRef.current.push(setTimeout(() => setStage(i), i * 500)),
-    );
-
     try {
-      const pairsToClear = pairs.length > 0 ? pairs : (await loadDemoPairs());
-      if (!pairsToClear) {
-        setStageError(demoError ?? "Demo pairs unavailable");
-        setEpoch("error");
-        return;
-      }
-
       const res = await fetch("/api/v1/net-margin/parallel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chain: "monad",
-          pairs: pairsToClear.map((p) => ({
+          pairs: pairs.map((p) => ({
             pairId: p.pairId,
             label: p.label,
-            a: {
-              wallet: p.a.wallet || "demo-desa-a",
-              legs: p.a.legs.map((l) => ({
-                venue: l.venue === "monad_fixture" ? "monad_fixture" : l.venue,
-                instrument: l.instrument,
-                bucket: l.bucket,
-                side: l.side,
-                qty: l.qty,
-                markUsd: l.markUsd,
-              })),
-            },
-            b: {
-              wallet: p.b.wallet || "demo-desk-b",
-              legs: p.b.legs.map((l) => ({
-                venue: l.venue === "monad_fixture" ? "monad_fixture" : l.venue,
-                instrument: l.instrument,
-                bucket: l.bucket,
-                side: l.side,
-                qty: l.qty,
-                markUsd: l.markUsd,
-              })),
-            },
+            a: { wallet: p.a.wallet, legs: p.a.parallelLegs },
+            b: { wallet: p.b.wallet, legs: p.b.parallelLegs },
           })),
         }),
       });
@@ -171,31 +164,25 @@ export default function MonadPage() {
       setAttestationQuote(data.attestation?.quote ?? null);
       setAttestationNote(data.attestation?.note ?? null);
       setAttestationVerified(data.attestation?.verified ?? null);
+      setEpoch("done");
     } catch {
       setStageError("Network error — the epoch never reached the enclave backend");
       setEpoch("error");
-      return;
     }
-
-    timersRef.current.push(
-      setTimeout(() => {
-        setEpoch("done");
-      }, EPOCH_STAGES.length * 500 + 200),
-    );
   }
 
   function resetEpoch() {
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
     setEpoch("idle");
-    setStage(-1);
     setStageError(null);
     setPairResults(new Map());
     setEpochDurationMs(null);
     setAttestationNote(null);
     setAttestationQuote(null);
     setAttestationVerified(null);
+    setEpochId(null);
   }
+
+  const canRun = pairs.length >= 3 && epoch !== "running";
 
   return (
     <PageShell chain="monad">
@@ -209,16 +196,14 @@ export default function MonadPage() {
               Many pairs, one epoch
             </h1>
             <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-              Monad&rsquo;s throughput lets a clearing desk net several desk pairs at once, every
-              epoch. Same formula as Solana, hardware-backed privacy (
+              Upload a blotter of desk pairs. Monad&rsquo;s throughput lets a clearing desk net
+              several pairs at once, every epoch. Same formula as Solana, hardware-backed privacy (
               <strong className="text-foreground">TEE ≠ MPC</strong>).
             </p>
           </div>
           <span
             className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-xs ${
-              attestationVerified
-                ? "border-primary/40 text-primary"
-                : "border-steel/40 text-steel"
+              attestationVerified ? "border-primary/40 text-primary" : "border-steel/40 text-steel"
             }`}
           >
             <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
@@ -230,32 +215,119 @@ export default function MonadPage() {
           </span>
         </div>
 
-        {(demoError || stageError || (pairs.length > 0 && pairs.length < 3)) && (
+        {/* Batch upload */}
+        <section className="rounded-xl border border-border bg-card p-6 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
+                <Upload className="h-4 w-4" aria-hidden />
+                Batch upload
+              </h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                CSV or JSON blotter. Each row: pair, desk (A/B), wallet, venue, instrument, bucket,
+                side, qty, markUsd. At least three complete pairs.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".csv,.json,text/csv,application/json"
+                className="hidden"
+                onChange={(e) => void handleFile(e.target.files?.[0] ?? null)}
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3 text-xs font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Upload className="h-3.5 w-3.5" aria-hidden />
+                Choose file
+              </button>
+              <button
+                type="button"
+                onClick={() => setText(EXAMPLE_CSV)}
+                className="inline-flex h-9 items-center rounded-full border border-border px-3 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Paste example
+              </button>
+            </div>
+          </div>
+
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={8}
+            spellCheck={false}
+            placeholder={EXAMPLE_CSV}
+            aria-label="Batch blotter contents"
+            className="w-full rounded-lg border border-border bg-secondary p-3 font-mono text-[11px] leading-relaxed text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled={importing || text.trim() === ""}
+              onClick={() => void importBatch()}
+              className="inline-flex h-10 items-center gap-2 rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50 disabled:pointer-events-none"
+            >
+              {importing ? (
+                <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
+              ) : (
+                <Upload className="h-4 w-4" aria-hidden />
+              )}
+              {importing ? "Pricing batch…" : "Parse & price batch"}
+            </button>
+            {pairs.length > 0 && (
+              <span className="font-mono text-xs text-muted-foreground">
+                {pairs.length} pair{pairs.length === 1 ? "" : "s"} loaded
+              </span>
+            )}
+          </div>
+
+          {(importError || importRowErrors.length > 0) && (
+            <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-xs space-y-2">
+              <p className="font-semibold text-destructive">{importError ?? "Batch rejected"}</p>
+              {importRowErrors.length > 0 && (
+                <ul className="max-h-40 space-y-1 overflow-auto font-mono text-muted-foreground">
+                  {importRowErrors.map((e, i) => (
+                    <li key={i}>
+                      {e.row > 0 ? `row ${e.row}: ` : ""}
+                      {e.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </section>
+
+        {(stageError || (pairs.length > 0 && pairs.length < 3)) && (
           <div role="alert" className="flex items-start gap-3 rounded-2xl border border-destructive/40 bg-destructive/5 p-4">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden />
             <div className="text-sm space-y-2">
               <p className="font-semibold text-destructive">Parallel clearing needs desk pairs</p>
               <p className="text-muted-foreground">
-                {demoError ??
-                  stageError ??
-                  `Only ${pairs.length} pair(s) available — the epoch requires at least 3.`}
+                {stageError ?? `Only ${pairs.length} pair(s) loaded — an epoch requires at least 3.`}
               </p>
-              <button
-                type="button"
-                onClick={() => void preloadPairs()}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border px-3 text-xs font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <RotateCcw className="h-3 w-3" aria-hidden />
-                Retry loading pairs
-              </button>
+              {stageError && (
+                <button
+                  type="button"
+                  onClick={() => void computeEpoch()}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border px-3 text-xs font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <RotateCcw className="h-3 w-3" aria-hidden />
+                  Retry epoch
+                </button>
+              )}
             </div>
           </div>
         )}
 
-        {epoch === "idle" && pairs.length >= 3 && (
+        {canRun && epoch === "idle" && (
           <button
             type="button"
-            onClick={computeEpoch}
+            onClick={() => void computeEpoch()}
             className="btn-press inline-flex h-11 w-fit items-center gap-2 rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             <Zap className="h-4 w-4" aria-hidden />
@@ -264,34 +336,18 @@ export default function MonadPage() {
         )}
 
         {epoch === "running" && (
-          <section aria-label="Epoch progress" aria-busy="true" className="anim-fade-up rounded-xl border border-steel/30 bg-card p-6">
+          <section
+            aria-label="Epoch progress"
+            aria-busy="true"
+            className="anim-fade-up rounded-xl border border-steel/30 bg-card p-6"
+          >
             <p className="flex items-center gap-2 text-sm font-medium">
               <LoaderCircle className="h-4 w-4 animate-spin text-primary motion-reduce:animate-none" aria-hidden />
-              Clearing epoch in progress inside the enclave
-              {pairResults.size > 0 && (
-                <span className="ml-auto font-mono text-xs tabular-nums text-muted-foreground" aria-live="polite">
-                  {pairResults.size}/3 pairs cleared concurrently
-                </span>
-              )}
+              Netting {pairs.length} pairs concurrently inside the enclave
             </p>
             <div className="mt-4 h-1 overflow-hidden rounded-full bg-secondary" aria-hidden>
               <div className="anim-shimmer h-full w-full rounded-full bg-gradient-to-r from-transparent via-muted-foreground/60 to-transparent motion-reduce:animate-none" />
             </div>
-            <ol className="mt-4 space-y-2">
-              {EPOCH_STAGES.map((s, i) => (
-                <li
-                  key={s}
-                  className={`flex items-center gap-2 font-mono text-xs transition-colors duration-200 ${
-                    i < stage ? "text-primary" : i === stage ? "text-foreground" : "text-muted-foreground"
-                  }`}
-                >
-                  <span aria-hidden className="w-4">
-                    {i < stage ? "✓" : i === stage ? "→" : "·"}
-                  </span>
-                  {s}
-                </li>
-              ))}
-            </ol>
           </section>
         )}
 
@@ -356,7 +412,6 @@ export default function MonadPage() {
               const result = pairResults.get(p.pairId);
               const cleared = Boolean(result);
               const siloed = siloedIm([...p.a.legs, ...p.b.legs]);
-              const showDemoHint = !cleared && epoch === "done";
               return (
                 <article
                   key={p.pairId}
@@ -373,7 +428,7 @@ export default function MonadPage() {
                         cleared ? "anim-flip border-primary/40 text-primary" : "border-border text-muted-foreground"
                       }`}
                     >
-                      {showDemoHint ? "not cleared" : cleared ? "cleared" : "queued"}
+                      {cleared ? "cleared" : "queued"}
                     </span>
                   </header>
                   <div className="mt-4">

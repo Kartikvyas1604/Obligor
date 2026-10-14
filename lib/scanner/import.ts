@@ -29,7 +29,7 @@ const SIDES: ReadonlySet<Side> = new Set(["long", "short", "lend", "borrow"]);
 
 const VENUES = new Set(["drift", "kamino", "mock_equity", "monad_fixture", "manual"]);
 
-const HEADER_ALIASES: Record<string, string> = {
+export const HEADER_ALIASES: Record<string, string> = {
   venue: "venue",
   instrument: "instrument",
   symbol: "instrument",
@@ -53,7 +53,7 @@ const HEADER_ALIASES: Record<string, string> = {
   haircut: "haircut",
 };
 
-function normHeader(h: string): string {
+export function normHeader(h: string): string {
   return h.trim().toLowerCase().replace(/[\s_-]+/g, "");
 }
 
@@ -76,7 +76,7 @@ function toStr(v: unknown): string | undefined {
  * Map a loose record (string cells from CSV, or JSON object) to a RawLegInput.
  * Accepts either qty+markUsd, or notionalUsd+one of them (the other is derived).
  */
-function recordToLeg(rec: Record<string, unknown>): { leg?: RawLegInput; error?: string } {
+export function recordToLeg(rec: Record<string, unknown>): { leg?: RawLegInput; error?: string } {
   const instrument = toStr(rec.instrument);
   const bucket = toStr(rec.bucket)?.toUpperCase();
   const sideRaw = toStr(rec.side)?.toLowerCase();
