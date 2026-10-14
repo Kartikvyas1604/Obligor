@@ -26,7 +26,7 @@ const log = makeLogger("positions");
 const SIDE_SCHEMA = z.enum(["long", "short", "lend", "borrow"]);
 const NEGATIVE_SIDES: ReadonlySet<Side> = new Set(["short", "borrow"]);
 
-const rawLegSchema = z.object({
+export const rawLegSchema = z.object({
   party: z.enum(["A", "B"]).optional(),
   venue: z.enum(["drift", "kamino", "mock_equity", "monad_fixture", "manual"]).default("manual"),
   instrument: z.string().trim().min(1).max(40),
