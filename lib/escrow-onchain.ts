@@ -57,6 +57,18 @@ export function escrowOnchainEnabled(): boolean {
   return env.escrow.realSettle;
 }
 
+/**
+ * Public key of the configured clearing authority, or null when unset/unreadable.
+ * Never exposes secret material — used only for discovery in the deposit UI.
+ */
+export function peekClearingAuthority(): string | null {
+  try {
+    return loadAuthority().publicKey.toBase58();
+  } catch {
+    return null;
+  }
+}
+
 /** Load the clearing-authority keypair from a Solana CLI JSON keypair file. */
 function loadAuthority(): Keypair {
   const path = env.escrow.authorityKeypair;
@@ -108,7 +120,7 @@ function associatedTokenAddress(mint: PublicKey, owner: PublicKey): PublicKey {
   )[0];
 }
 
-interface DecodedEscrow {
+export interface DecodedEscrow {
   partyA: PublicKey;
   partyB: PublicKey;
   clearingAuthority: PublicKey;
@@ -117,6 +129,7 @@ interface DecodedEscrow {
   partyASiloedIm: bigint;
   partyBSiloedIm: bigint;
   totalLockedUsd: bigint;
+  freedCapitalUsd: bigint;
   status: number;
 }
 
@@ -146,6 +159,7 @@ function decodeEscrow(data: Buffer): DecodedEscrow {
   o += 8;
   const totalLockedUsd = data.readBigUInt64LE(o);
   o += 8; // total_locked_usd
+  const freedCapitalUsd = data.readBigUInt64LE(o);
   o += 8; // freed_capital_usd
   o += 32; // proof_hash
   const status = data.readUInt8(o);
@@ -158,6 +172,7 @@ function decodeEscrow(data: Buffer): DecodedEscrow {
     partyASiloedIm,
     partyBSiloedIm,
     totalLockedUsd,
+    freedCapitalUsd,
     status,
   };
 }
@@ -168,6 +183,77 @@ function explorerUrl(signature: string): string {
     return `https://explorer.solana.com/tx/${signature}?cluster=custom&customUrl=${encodeURIComponent(rpc)}`;
   }
   return `https://explorer.solana.com/tx/${signature}`;
+}
+
+export interface EscrowSnapshot {
+  escrowAccount: string;
+  programId: string;
+  partyA: string;
+  partyB: string;
+  clearingAuthority: string;
+  mint: string;
+  vault: string;
+  baseDecimals: number;
+  totalLockedUsd: number;
+  freedCapitalUsd: number;
+  partyASiloedUsd: number;
+  partyBSiloedUsd: number;
+  status: "Initialized" | "Deposited" | "Settled" | "Liquidated" | "Unknown";
+}
+
+const STATUS_NAMES: Record<number, EscrowSnapshot["status"]> = {
+  0: "Initialized",
+  1: "Deposited",
+  2: "Settled",
+  3: "Liquidated",
+};
+
+/**
+ * Read and decode a live escrow account. Read-only: no keypair required, so it
+ * is safe to call from a verification endpoint. Throws loudly when the account
+ * is missing, owned by another program, or undecodable.
+ */
+export async function readEscrowAccount(escrowAccount: string): Promise<EscrowSnapshot> {
+  let escrowPk: PublicKey;
+  try {
+    escrowPk = new PublicKey(escrowAccount);
+  } catch {
+    throw new EscrowOnchainError(`escrowAccount is not a valid Solana pubkey: ${escrowAccount}`);
+  }
+  const programId = new PublicKey(env.escrow.programId);
+  const connection = new Connection(env.escrow.rpcUrl, env.escrow.commitment);
+
+  const info = await connection.getAccountInfo(escrowPk).catch((err) => {
+    throw new EscrowOnchainError(
+      `Could not read escrow account ${escrowAccount}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  });
+  if (!info) {
+    throw new EscrowOnchainError(`Escrow account ${escrowAccount} does not exist on ${env.escrow.rpcUrl}`);
+  }
+  if (!info.owner.equals(programId)) {
+    throw new EscrowOnchainError(
+      `Escrow account ${escrowAccount} is owned by ${info.owner.toBase58()}, not the escrow program ${programId.toBase58()}`,
+    );
+  }
+
+  const escrow = decodeEscrow(Buffer.from(info.data));
+  const scale = 10 ** env.escrow.baseDecimals;
+  return {
+    escrowAccount: escrowPk.toBase58(),
+    programId: programId.toBase58(),
+    partyA: escrow.partyA.toBase58(),
+    partyB: escrow.partyB.toBase58(),
+    clearingAuthority: escrow.clearingAuthority.toBase58(),
+    mint: escrow.mint.toBase58(),
+    vault: escrow.vault.toBase58(),
+    baseDecimals: env.escrow.baseDecimals,
+    totalLockedUsd: Number(escrow.totalLockedUsd) / scale,
+    partyASiloedUsd: Number(escrow.partyASiloedIm) / scale,
+    partyBSiloedUsd: Number(escrow.partyBSiloedIm) / scale,
+    status: STATUS_NAMES[escrow.status] ?? "Unknown",
+    freedCapitalUsd: Number(escrow.freedCapitalUsd) / scale,
+  };
 }
 
 export interface SettlementTx {

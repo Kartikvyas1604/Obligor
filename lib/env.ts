@@ -217,6 +217,9 @@ const envSchema = z.object({
     // netted margin USD → base units with this before settling on-chain. Must
     // match the decimals of the mint used in initialize_escrow.
     baseDecimals: positiveInt(6),
+    // SPL mint (base58) used as escrow collateral. Required for the real
+    // client-signed deposit flow (initialize_escrow); UNSET disables it.
+    collateralMint: z.string().optional().default(""),
   }),
 });
 
@@ -303,6 +306,7 @@ function load(): Env {
       authorityKeypair: process.env.SOLANA_AUTHORITY_KEYPAIR,
       commitment: process.env.SOLANA_COMMITMENT,
       baseDecimals: process.env.ESCROW_BASE_DECIMALS,
+      collateralMint: process.env.ESCROW_COLLATERAL_MINT,
     },
   });
 

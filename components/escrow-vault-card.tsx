@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Lock, Unlock, CheckCircle2, ShieldAlert } from "lucide-react";
 import { usd as usdFmt, type BackendKind } from "@/lib/margin";
+import { EscrowDepositPanel } from "./escrow-deposit-panel";
 
 interface EscrowVaultCardProps {
   siloedMarginA: number;
@@ -280,6 +281,14 @@ export function EscrowVaultCard({
           ? "Split confirmed by the server from the verified netting result."
           : "Projection: freed capital split proportionally to each desk’s locked siloed margin. The confirmed split is returned by the server on settle."}
       </p>
+
+      {/* Real client-signed on-chain deposit (when the escrow program is configured) */}
+      <EscrowDepositPanel
+        walletA={walletA}
+        walletB={walletB}
+        amountAUsd={Math.round(siloedMarginA * 100) / 100}
+        amountBUsd={Math.round(siloedMarginB * 100) / 100}
+      />
 
       {/* Interactive Actions */}
       <div className="pt-2 space-y-3">
