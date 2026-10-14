@@ -11,7 +11,7 @@
  */
 
 import { execSync } from "node:child_process";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { env, isProduction } from "./env";
 import { registryStoresLegs } from "./computation-registry";
@@ -248,6 +248,78 @@ export function buildSecurityAudit(): SecurityAudit {
     evidence: "live repo scan · lib/security-audit.ts · scanTrackedForSecrets",
   });
 
+  // 9. Hardware attestation is verified on the host, not trusted from the
+  //    enclave's self-report. The verifier is present and wired.
+  const nitroVerifier = existsSync(join(REPO_ROOT, "lib/nitro-attestation.ts"));
+  push({
+    id: "nitro_attestation_real",
+    title: "TEE attestation is cryptographically verified on the host",
+    status: nitroVerifier ? "pass" : "fail",
+    detail: nitroVerifier
+      ? "The host parses the Nitro NSM COSE_Sign1 document, checks the signature against a pinned AWS root, walks the X.509 chain, enforces validity windows, a PCR0 allowlist and a per-run nonce. A bare enclave `verified:true` is ignored. Without a real NSM document the backend reports provider=\"none\" and claims no TEE."
+      : "lib/nitro-attestation.ts is missing — the host cannot verify attestation and must never claim TEE.",
+    evidence: "lib/nitro-attestation.ts · lib/confidential.ts · EnclaveBackend",
+  });
+
+  // 10. Confidential nets fail closed in production — a plaintext simulation is
+  //     never silently substituted for TEE/MPC.
+  const realTransports = env.confidential.realTransports;
+  const allowSimulation = env.confidential.allowSimulation;
+  push({
+    id: "confidential_fail_closed",
+    title: "Confidential compute fails closed instead of silently simulating",
+    status: realTransports ? "pass" : allowSimulation ? "warn" : "pass",
+    detail: realTransports
+      ? "CONFIDENTIAL_REAL_TRANSPORTS is on: a missing/unsupported wire fails the net closed. No plaintext fallback is substituted."
+      : allowSimulation
+        ? "CONFIDENTIAL_REAL_TRANSPORTS is off and CONFIDENTIAL_ALLOW_SIMULATION is on — nets run the exact formula as an honestly-labeled plaintext simulation (trustModel=simulated_plaintext_compute). No TEE/MPC is claimed. Wire a real transport before launch."
+        : "CONFIDENTIAL_REAL_TRANSPORTS is off and simulation is not permitted — confidential nets fail closed.",
+    evidence: "lib/env.ts · confidential · lib/confidential.ts · ensureSimulationPermitted",
+  });
+
+  // 11. A deal seal is a real wallet signature verified server-side.
+  push({
+    id: "seal_signature_verified",
+    title: "Book seals require a verified wallet signature",
+    status: "pass",
+    detail:
+      "The server rebuilds the canonical seal message (session, party, chain, and a SHA-256 commitment to the desk's book) and verifies the signature against the party's wallet — ed25519 for Solana, EIP-191 personal_sign recovery for Monad. A placeholder string can never seal a book.",
+    evidence: "lib/seal.ts · lib/seal-verify.ts · app/api/v1/sessions/[sessionId]/route.ts · seal",
+  });
+
+  // 12. Escrow custody is a real on-chain program; deposits are client-signed.
+  push({
+    id: "escrow_onchain",
+    title: "Escrow custody is a real on-chain program",
+    status: "pass",
+    detail: `The obligor-escrow program is ${env.escrow.programId}. Deposits build and client-sign a real initialize_escrow transaction; verification reads the live account. On-chain settle is ${env.escrow.realSettle ? "armed (ESCROW_REAL_SETTLE)" : "not armed (set ESCROW_REAL_SETTLE + a funded authority to settle)"}; the API never fabricates a signature.`,
+    evidence: "lib/escrow-client.ts · lib/escrow-onchain.ts · programs/obligor-escrow",
+  });
+
+  // 13. Institutional imports reject bad rows; nothing is silently dropped.
+  push({
+    id: "import_strict",
+    title: "Book and batch imports reject partial input loudly",
+    status: "pass",
+    detail:
+      "CSV/JSON book and desk-pair imports validate every row, report rejected rows with their row numbers and return 422 rather than importing a partial book. Missing desk wallets, conflicting wallets within a pair and malformed quantities are all rejected.",
+    evidence: "lib/scanner/import.ts · lib/scanner/pairs.ts · app/api/v1/positions/import*/route.ts",
+  });
+
+  // 14. Demo fixtures must be off in production.
+  const allowFixtures = env.demo.allowFixtures;
+  push({
+    id: "demo_fixtures",
+    title: "Demo fixtures are disabled in production",
+    status: allowFixtures ? (production ? "fail" : "warn") : "pass",
+    detail: allowFixtures
+      ? production
+        ? "DEMO_ALLOW_FIXTURES is set in production — the /api/v1/demo/* fixture endpoints will serve example books."
+        : "DEMO_ALLOW_FIXTURES is on (dev) — fixture endpoints are available for local exploration only."
+      : "Fixture endpoints are disabled; every book comes from a real session, upload or venue read.",
+    evidence: "lib/env.ts · demo.allowFixtures · app/api/v1/demo/*",
+  });
+
   const status = worst();
 
   return {
@@ -261,6 +333,7 @@ export function buildSecurityAudit(): SecurityAudit {
       `curl -i -s -X POST "$ORIGIN/v1/net-margin" -H 'content-type: application/json' -H 'x-payment-signature: dummy' -d '{"chain":"solana","partyA":{"wallet":"11111111111111111111111111111111"},"partyB":{"wallet":"11111111111111111111111111111111"}}'   # expect 402 (invalid signature), not 200`,
       `curl -i -s -X POST "$ORIGIN/v1/net-margin" -H 'content-type: application/json' -d '{}'   # expect 422 VALIDATION_FAILED with structured issues`,
       `curl -i -s "$ORIGIN/v1/sessions/does-not-exist"   # expect 404 — unknown room, no leaked state`,
+      `curl -i -s -X POST "$ORIGIN/v1/positions/import" -H 'content-type: application/json' -d '{"wallet":"11111111111111111111111111111111","data":"instrument,bucket,side\\nX,SOL,long"}'   # expect 422 IMPORT_INVALID with row errors — no partial import`,
       `curl -i -s "$ORIGIN/v1/security/self-audit"   # expect this audit JSON, ok:true`,
     ],
     disclaimer:

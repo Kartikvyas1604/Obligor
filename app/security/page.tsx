@@ -117,24 +117,41 @@ export default function SecurityPage() {
         </section>
 
         <section
-          aria-label="What a production audit would add"
+          aria-label="What has landed and what a real audit would still add"
           className="rounded-lg border border-border bg-card p-6"
         >
-          <h2 className="text-sm font-medium">A real audit would add</h2>
+          <h2 className="text-sm font-medium">Landed, and still open</h2>
           <ul className="mt-3 max-w-prose list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted-foreground">
             <li>
-              <strong className="text-foreground">Coinbase x402 &quot;exact&quot; interop</strong> — Obligor
-              already cryptographically verifies its own ed25519 receipts over the exact challenge terms;
-              the tracked follow-up is on-chain settlement via the @x402 SDK.
+              <strong className="text-foreground">x402 receipts verify cryptographically</strong> — the
+              server verifies a real ed25519 signature over the exact challenge terms and fails closed;
+              format-checked headers no longer clear payment. The tracked follow-up is on-chain
+              settlement via the @x402 SDK.
+            </li>
+            <li>
+              <strong className="text-foreground">Nitro NSM verification landed</strong> — the host parses
+              the COSE_Sign1 document, checks the signature against a pinned AWS root, walks the X.509
+              chain, and enforces validity windows, a PCR0 allowlist and a per-run nonce. A bare enclave
+              <code className="mx-1 rounded border border-border bg-secondary px-1.5 py-0.5 font-mono text-xs">verified:true</code>
+              is ignored. This build ships no NSM producer, so the enclave honestly reports
+              <code className="mx-1 rounded border border-border bg-secondary px-1.5 py-0.5 font-mono text-xs">provider:&quot;none&quot;</code>
+              and claims no TEE — the real producer is the tracked follow-up.
+            </li>
+            <li>
+              <strong className="text-foreground">Confidential compute fails closed in production</strong> —
+              a plaintext simulation is never silently substituted for TEE/MPC; when it is permitted it is
+              labeled <code className="mx-1 rounded border border-border bg-secondary px-1.5 py-0.5 font-mono text-xs">simulated_plaintext_compute</code>.
+              The Arcium MXE encryption lifecycle is not wired in this build.
+            </li>
+            <li>
+              <strong className="text-foreground">On-chain escrow and seals are real</strong> — deposits
+              client-sign an <code className="mx-1 rounded border border-border bg-secondary px-1.5 py-0.5 font-mono text-xs">initialize_escrow</code>
+              transaction against the deployed program, and book seals are verified wallet signatures
+              (ed25519 or EIP-191). No fabricated signatures anywhere.
             </li>
             <li>
               <strong className="text-foreground">Third-party penetration test</strong> — this self-audit
-              covers the demo surface, not an adversarial engagement.
-            </li>
-            <li>
-              <strong className="text-foreground">Attestation verification hardening</strong> — the host
-              already ignores a bare enclave boolean and requires an expected-measurement (and optional
-              PCR0) match; a genuine Nitro/Oyster NSM producer is the tracked follow-up.
+              covers the running surface, not an adversarial engagement; that remains outstanding.
             </li>
             <li>
               <strong className="text-foreground">TLS/cert hygiene</strong> — HSTS is asserted here; the
