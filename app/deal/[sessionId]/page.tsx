@@ -7,6 +7,7 @@ import { PageShell } from "@/components/page-shell";
 import { MarginHero } from "@/components/margin-hero";
 import { PositionBuilderModal } from "@/components/position-builder-modal";
 import { EscrowVaultCard } from "@/components/escrow-vault-card";
+import { RiskPanel } from "@/components/risk-panel";
 import { ExposureBars } from "@/components/charts";
 import { WalletConnect } from "@/components/wallet-connect";
 import { getPartyTokens, setPartyTokens } from "@/lib/client-party-tokens";
@@ -457,6 +458,10 @@ export default function LiveDealPage({
             );
           })}
         </div>
+
+        {myParty && !myParty.legsWithheld && myParty.legs.length > 0 && (
+          <RiskPanel legs={myParty.legs} label={`Desk ${myRole}`} />
+        )}
 
         {(joinError || sealError || clearError) && (
           <div role="alert" className="flex items-start gap-3 rounded-2xl border border-destructive/40 bg-destructive/5 p-4">

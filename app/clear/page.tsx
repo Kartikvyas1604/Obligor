@@ -18,6 +18,7 @@ import { MarginHero } from "@/components/margin-hero";
 import { NettingCalculator } from "@/components/netting-calculator";
 import { WalletConnect } from "@/components/wallet-connect";
 import { EscrowVaultCard } from "@/components/escrow-vault-card";
+import { RiskPanel } from "@/components/risk-panel";
 import { PositionBuilderModal } from "@/components/position-builder-modal";
 import { VerifyResultChip } from "@/components/verify-chip";
 import { ThreePartyCard } from "@/components/three-party-card";
@@ -547,6 +548,14 @@ export default function ClearPage() {
         {phase === "done" && netted && (
           <div className="space-y-6">
             <MarginHero result={netted} siloedCombined={siloed.siloedCombined} onReset={reset} />
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              {bookA.legs.length > 0 && <RiskPanel legs={bookA.legs} label={bookA.label || "Desk A"} />}
+              {bookB.legs.length > 0 && <RiskPanel legs={bookB.legs} label={bookB.label || "Desk B"} />}
+            </div>
+            {bookA.legs.length + bookB.legs.length > 0 && (
+              <RiskPanel legs={[...bookA.legs, ...bookB.legs]} label="Combined cleared portfolio" />
+            )}
 
             {/* Step 4: escrow release demo against the computed split */}
             <EscrowVaultCard
