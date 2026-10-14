@@ -55,6 +55,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Self-contained server bundle for the container image (Dockerfile copies
+  // .next/standalone). Harmless for `next start` too.
+  output: "standalone",
   poweredByHeader: false,
   reactStrictMode: true,
   // Solana client libs are Node-only and use optional/require internals; keep

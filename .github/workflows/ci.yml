@@ -40,6 +40,14 @@ jobs:
       - name: Unit tests (margin engine, rate limiter, session store, escrow math)
         run: npm test
 
+      - name: Schema migration smoke (idempotent, sqlite)
+        env:
+          SESSION_STORE_MODE: sqlite
+          SQLITE_PATH: /tmp/ci-obligor.db
+        run: |
+          npm run migrate
+          npm run migrate   # must be a safe no-op on re-run
+
       - name: Production build
         run: npm run build
         env:
@@ -62,6 +70,32 @@ jobs:
           npx -y tsx scripts/demo-agent-a.ts
           npx -y tsx scripts/demo-agent-b.ts
           npm run verify:security
+
+  # The container is the deploy artifact: prove the Dockerfile builds and the
+  # image boots and answers a health check, on every PR — not only at release.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t obligor:ci .
+
+      - name: Boot the image and assert /health
+        run: |
+          docker run -d --name obligor-ci -p 3000:3000 \
+            -e SOLANA_PAY_TO=7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU \
+            obligor:ci
+          ok=0
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/api/v1/health >/tmp/health.json; then ok=1; break; fi
+            sleep 2
+          done
+          cat /tmp/health.json || true
+          docker logs obligor-ci || true
+          docker rm -f obligor-ci
+          test "$ok" = "1"
+          grep -q '"ok":true' /tmp/health.json
 
   # Compiled-artifact claims become checkable: the Arcis circuit, Rust
   # enclave, Anchor program, and Solidity escrow contract must not just exist
@@ -89,8 +123,10 @@ jobs:
         run: cargo build --locked 2>/dev/null || cargo build
         working-directory: enclave/obligor-enclave
 
-      - name: Build the Anchor escrow program (host typecheck)
-        run: cargo build --manifest-path programs/obligor-escrow/Cargo.toml
+      - name: Build + unit-test the Anchor escrow program (release-split math)
+        run: |
+          cargo build --manifest-path programs/obligor-escrow/Cargo.toml
+          cargo test  --manifest-path programs/obligor-escrow/Cargo.toml
 
       - name: Build + test the Arcium/Arcis MXE circuit crate
         run: |

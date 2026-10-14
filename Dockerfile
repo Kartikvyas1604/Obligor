@@ -1,46 +1,48 @@
 # syntax=docker/dockerfile:1
+#
+# Obligor runtime image. Multi-stage: full deps → production build → a slim,
+# non-root runner serving Next.js' standalone output. node:24 provides the
+# built-in node:sqlite the session/idempotency/registry stores rely on.
 
-# ---------- deps (all, for building) ----------
-FROM node:24-alpine AS deps
+FROM node:24-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# ---------- build ----------
-FROM node:24-alpine AS build
+FROM node:24-bookworm-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-# Build needs no runtime secrets; env parsing tolerates placeholders/absent vars.
+# Build the self-contained server bundle (.next/standalone).
 RUN npm run build
 
-# ---------- runtime ----------
-FROM node:24-alpine AS runner
+FROM node:24-bookworm-slim AS runner
 WORKDIR /app
+
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
     HOSTNAME=0.0.0.0 \
     DATA_DIR=/data
 
-RUN addgroup --system --gid 1001 nodejs \
- && adduser --system --uid 1001 nextjs \
- && mkdir -p /data && chown nextjs:nodejs /data
+RUN groupadd --gid 1001 nodejs \
+ && useradd --uid 1001 --gid nodejs --shell /bin/false nextjs
 
-# Runtime needs only the built output + node_modules (next/typescript live here).
-COPY --from=build --chown=nextjs:nodejs /app/node_modules ./node_modules
-COPY --from=build --chown=nextjs:nodejs /app/.next ./.next
-COPY --from=build --chown=nextjs:nodejs /app/public ./public
-COPY --from=build --chown=nextjs:nodejs /app/package.json ./package.json
-COPY --from=build --chown=nextjs:nodejs /app/next.config.ts ./next.config.ts
+# Static assets and the traced standalone server (includes node_modules it uses).
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Persistent volume root for the SQLite file (and JSON store fallback).
+RUN mkdir -p /data && chown -R nextjs:nodejs /data
+VOLUME ["/data"]
 
 USER nextjs
 EXPOSE 3000
-VOLUME ["/data"]
 
-# Liveness/readiness probe against the config surface (no secrets in payload).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-CMD ["npm", "run", "start"]
+# server.js is emitted by `output: "standalone"`.
+CMD ["node", "server.js"]

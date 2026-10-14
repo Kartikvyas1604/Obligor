@@ -1,0 +1,42 @@
+name: Rollback (container)
+
+# Re-point the moving `latest` tag at a previously-published immutable image
+# tag. Every deploy publishes `:<short-sha>` in addition to `latest`, so a
+# rollback is: pick the last-good short SHA and run this workflow with it.
+# Deployments that pin by digest/tag are then restored on redeploy.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing image tag to roll back to (e.g. the 12-char commit SHA)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify the target tag exists
+        run: |
+          IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}
+          docker manifest inspect "$IMAGE:${{ inputs.tag }}" >/dev/null \
+            || { echo "Tag ${{ inputs.tag }} not found in $IMAGE"; exit 1; }
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Re-tag previous image as latest
+        run: |
+          docker pull "$IMAGE:${{ inputs.tag }}"
+          docker tag "$IMAGE:${{ inputs.tag }}" "$IMAGE:latest"
+          docker push "$IMAGE:latest"
+          echo "Rolled back latest -> ${{ inputs.tag }}"

@@ -17,7 +17,9 @@
     "demo:agent-b": "npx -y tsx scripts/demo-agent-b.ts",
     "demo:agent-monad": "npx -y tsx scripts/demo-agent-monad.ts",
     "test": "tsx --test tests/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "migrate": "npx -y tsx scripts/migrate.ts",
+    "test:programs": "cargo test -p obligor-escrow"
   },
   "dependencies": {
     "@noble/curves": "^1.9.7",

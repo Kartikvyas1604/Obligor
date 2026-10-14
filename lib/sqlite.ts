@@ -25,7 +25,7 @@ interface Statement {
   all(...params: unknown[]): Record<string, unknown>[];
 }
 
-interface Database {
+export interface Database {
   exec(sql: string): void;
   prepare(sql: string): Statement;
 }

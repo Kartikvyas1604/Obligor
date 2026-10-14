@@ -1,26 +1,27 @@
-# Build context hygiene — keep the image small and secret-free.
-node_modules
-.next
 .git
 .github
-.data
-cache
-crash
-
-# Local env / secrets
+.next
+node_modules
+npm-debug.log*
+Dockerfile
+.dockerignore
+docker-compose.yml
 .env
 .env.*
 !.env.example
-
-# Native workspaces not needed at runtime
-enclave
-programs
-contracts
+data
+*.db
+*.db-wal
+*.db-shm
+target
+programs/**/target
+mxe/target
+enclave/**/target
+contracts/out
+contracts/cache
+docs
 tests
-
-# Noise
-*.log
-.DS_Store
 *.md
 !README.md
 coverage
+.DS_Store
