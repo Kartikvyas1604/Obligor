@@ -109,16 +109,8 @@ pub mod obligor_escrow {
 
             let total = escrow.total_locked_usd;
             let siloed_a = escrow.party_a_siloed_im;
-            let freed_capital_usd = total - netted_margin_usd;
-
-            // Proportional release in u128 to avoid u64 overflow, then bounded back.
-            let release_a_u128 =
-                (freed_capital_usd as u128) * (siloed_a as u128) / (total as u128);
-            let release_a =
-                u64::try_from(release_a_u128).map_err(|_| EscrowError::MathOverflow)?;
-            let release_b = freed_capital_usd
-                .checked_sub(release_a)
-                .ok_or(EscrowError::MathOverflow)?;
+            let (release_a, release_b, freed_capital_usd) =
+                compute_release_split(total, siloed_a, netted_margin_usd)?;
 
             escrow.freed_capital_usd = freed_capital_usd;
             escrow.status = EscrowStatus::Settled;
@@ -186,6 +178,31 @@ pub mod obligor_escrow {
 
         Ok(())
     }
+}
+
+/// Proportional release of freed collateral back to the two desks.
+///
+/// `freed = total - netted`; Party A receives `floor(freed * siloed_a / total)`
+/// and Party B receives the remainder, so `release_a + release_b == freed`
+/// exactly (no dust). Computed in u128 to avoid u64 overflow, then bounded back
+/// to u64. Pure and side-effect free so it can be unit-tested without a
+/// validator.
+pub fn compute_release_split(
+    total: u64,
+    siloed_a: u64,
+    netted: u64,
+) -> Result<(u64, u64, u64)> {
+    require!(total > 0, EscrowError::ZeroCollateral);
+    require!(netted <= total, EscrowError::InvalidNettedMargin);
+    require!(siloed_a <= total, EscrowError::MathOverflow);
+
+    let freed = total - netted;
+    let release_a_u128 = (freed as u128) * (siloed_a as u128) / (total as u128);
+    let release_a = u64::try_from(release_a_u128).map_err(|_| EscrowError::MathOverflow)?;
+    let release_b = freed
+        .checked_sub(release_a)
+        .ok_or(EscrowError::MathOverflow)?;
+    Ok((release_a, release_b, freed))
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
@@ -302,4 +319,68 @@ pub enum EscrowError {
     MathOverflow,
     #[msg("Clearing authority must be a non-default pubkey.")]
     InvalidClearingAuthority,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn releases_everything_when_netted_is_zero() {
+        let (a, b, freed) = compute_release_split(1_000, 600, 0).unwrap();
+        assert_eq!(freed, 1_000);
+        assert_eq!(a + b, freed);
+        assert_eq!(a, 600);
+        assert_eq!(b, 400);
+    }
+
+    #[test]
+    fn releases_nothing_when_netted_equals_locked() {
+        let (a, b, freed) = compute_release_split(1_000, 600, 1_000).unwrap();
+        assert_eq!(freed, 0);
+        assert_eq!(a, 0);
+        assert_eq!(b, 0);
+    }
+
+    #[test]
+    fn split_is_proportional_to_siloed_margin() {
+        // 40% of the freed collateral goes to A (who posted 40%).
+        let (a, b, freed) = compute_release_split(10_000, 4_000, 5_000).unwrap();
+        assert_eq!(freed, 5_000);
+        assert_eq!(a, 2_000);
+        assert_eq!(b, 3_000);
+    }
+
+    #[test]
+    fn floors_to_a_and_gives_remainder_to_b_no_dust() {
+        // total=3, siloed_a=1, netted=0 → freed=3, a=floor(3*1/3)=1, b=2.
+        let (a, b, freed) = compute_release_split(3, 1, 0).unwrap();
+        assert_eq!((a, b, freed), (1, 2, 3));
+        // Indivisible case: total=7, siloed_a=1, freed=7 → a=1, b=6.
+        assert_eq!(compute_release_split(7, 1, 0).unwrap(), (1, 6, 7));
+    }
+
+    #[test]
+    fn handles_max_u64_without_overflow() {
+        let total = u64::MAX;
+        let siloed_a = total / 2;
+        let (a, b, freed) = compute_release_split(total, siloed_a, 0).unwrap();
+        assert_eq!(freed, total);
+        assert_eq!(a.checked_add(b).unwrap(), freed);
+    }
+
+    #[test]
+    fn rejects_netted_greater_than_locked() {
+        assert!(compute_release_split(1_000, 500, 1_001).is_err());
+    }
+
+    #[test]
+    fn rejects_zero_total() {
+        assert!(compute_release_split(0, 0, 0).is_err());
+    }
+
+    #[test]
+    fn rejects_siloed_a_greater_than_total() {
+        assert!(compute_release_split(100, 200, 0).is_err());
+    }
 }
