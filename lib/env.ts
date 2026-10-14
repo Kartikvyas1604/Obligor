@@ -68,6 +68,13 @@ const envSchema = z.object({
     sqlitePath: z.string().optional().default(""),
   }),
 
+  registry: z.object({
+    // Committed-computation records (hashes only, never legs) are pruned from
+    // the durable SQLite mirror once older than this, so /verify storage stays
+    // bounded. 30 days by default.
+    retentionMs: positiveInt(1000 * 60 * 60 * 24 * 30),
+  }),
+
   rateLimit: z.object({
     maxPerWindow: positiveInt(60),
     windowMs: positiveInt(60_000),
@@ -241,6 +248,9 @@ function load(): Env {
       ttlMs: process.env.SESSION_TTL_MS,
       idempotencyBackend: process.env.IDEMPOTENCY_BACKEND,
       sqlitePath: process.env.SQLITE_PATH,
+    },
+    registry: {
+      retentionMs: process.env.REGISTRY_RETENTION_MS,
     },
     rateLimit: {
       maxPerWindow: process.env.RATE_LIMIT_MAX,

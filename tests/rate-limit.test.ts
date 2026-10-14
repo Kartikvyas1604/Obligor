@@ -25,6 +25,23 @@ describe("rate limiter (token bucket)", () => {
     assert.ok(Number(last["RateLimit-Remaining"]) >= 0 || threw !== null);
   });
 
+  it("carries RateLimit-* and a Retry-After header on the 429", () => {
+    const key = `hdrs:${Date.now()}-${Math.random()}`;
+    let threw: ApiError | null = null;
+    for (let i = 0; i < env.rateLimit.demoMaxPerWindow + 1; i++) {
+      try {
+        rateLimit(key, env.rateLimit.demoMaxPerWindow, 60_000);
+      } catch (err) {
+        threw = err as ApiError;
+      }
+    }
+    assert.ok(threw instanceof ApiError);
+    const h = threw!.headers ?? {};
+    assert.equal(h["RateLimit-Limit"], String(env.rateLimit.demoMaxPerWindow));
+    assert.ok(Number(h["Retry-After"]) >= 1, "Retry-After is at least one second");
+    assert.ok(Number(h["RateLimit-Reset"]) >= 1);
+  });
+
   it("refills over time (window halves recovers roughly half the capacity)", async () => {
     const key = `refill:${Date.now()}-${Math.random()}`;
     // Drain the bucket

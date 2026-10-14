@@ -18,19 +18,25 @@ const LEVEL_WEIGHT: Record<LogLevel, number> = {
 
 const SECRET_KEY_PATTERN = /(secret|key|token|password|signature|authorization)/i;
 
+const MAX_STRING = 300;
+
+function redactValue(value: unknown): unknown {
+  if (value == null || typeof value !== "object") {
+    return typeof value === "string" && value.length > MAX_STRING
+      ? value.slice(0, MAX_STRING) + "…"
+      : value;
+  }
+  if (Array.isArray(value)) return value.map(redactValue);
+  return redact(value as Record<string, unknown>);
+}
+
 function redact(meta: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(meta)) {
-    if (v == null) {
-      out[k] = v;
-    } else if (SECRET_KEY_PATTERN.test(k)) {
+    if (SECRET_KEY_PATTERN.test(k)) {
       out[k] = "<redacted>";
-    } else if (typeof v === "object" && !Array.isArray(v)) {
-      out[k] = redact(v as Record<string, unknown>);
-    } else if (typeof v === "string" && v.length > 300) {
-      out[k] = v.slice(0, 300) + "…";
     } else {
-      out[k] = v;
+      out[k] = redactValue(v);
     }
   }
   return out;

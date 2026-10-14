@@ -11,10 +11,20 @@
  * limiter) — the response is honest about that when a lookup misses.
  */
 
+import { env } from "./env";
 import { makeLogger } from "./logger";
 import { openSqlite, sqliteSelected } from "./sqlite";
 
 const log = makeLogger("computation-registry");
+
+const CREATE_TABLE =
+  "CREATE TABLE IF NOT EXISTS computations (computation_id TEXT PRIMARY KEY, payload TEXT NOT NULL, created_at INTEGER NOT NULL);";
+const CREATE_INDEX =
+  "CREATE INDEX IF NOT EXISTS computations_created_at ON computations (created_at);";
+
+/** Prune at most every 5 minutes so writes stay cheap. */
+const PRUNE_INTERVAL_MS = 5 * 60 * 1000;
+let lastPruneMs = 0;
 
 export interface ComputationRecord {
   computationId: string;
@@ -41,19 +51,39 @@ const registry: Map<string, ComputationRecord> =
 const MAX_IN_MEMORY = 5_000;
 
 let tableReady = false;
+function ensureTable(db: ReturnType<typeof openSqlite>): void {
+  if (tableReady) return;
+  db.exec(CREATE_TABLE);
+  db.exec(CREATE_INDEX);
+  tableReady = true;
+}
+
+/** Delete durable records older than the retention window (bounded storage). */
+function pruneExpired(db: ReturnType<typeof openSqlite>, now: number): void {
+  if (now - lastPruneMs < PRUNE_INTERVAL_MS) return;
+  lastPruneMs = now;
+  const cutoff = now - env.registry.retentionMs;
+  try {
+    const info = db
+      .prepare("DELETE FROM computations WHERE created_at < ?;")
+      .run(cutoff);
+    if (info.changes > 0) log.info("registry pruned", { deleted: info.changes, cutoff });
+  } catch (err) {
+    log.warn("registry prune failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 function persist(record: ComputationRecord): void {
   if (!sqliteSelected()) return;
   try {
     const db = openSqlite();
-    if (!tableReady) {
-      db.exec(
-        "CREATE TABLE IF NOT EXISTS computations (computation_id TEXT PRIMARY KEY, payload TEXT NOT NULL, created_at INTEGER NOT NULL);",
-      );
-      tableReady = true;
-    }
+    ensureTable(db);
     db.prepare(
       "INSERT OR REPLACE INTO computations (computation_id, payload, created_at) VALUES (?, ?, ?);",
     ).run(record.computationId, JSON.stringify(record), record.createdAt);
+    pruneExpired(db, Date.now());
   } catch (err) {
     // Persistence is best-effort: never fail a computed result because the
     // durable mirror is unavailable — the in-memory record stays authoritative.
@@ -68,12 +98,7 @@ function load(computationId: string): ComputationRecord | null {
   if (!sqliteSelected()) return null;
   try {
     const db = openSqlite();
-    if (!tableReady) {
-      db.exec(
-        "CREATE TABLE IF NOT EXISTS computations (computation_id TEXT PRIMARY KEY, payload TEXT NOT NULL, created_at INTEGER NOT NULL);",
-      );
-      tableReady = true;
-    }
+    ensureTable(db);
     const row = db
       .prepare("SELECT payload FROM computations WHERE computation_id = ?;")
       .get(computationId);

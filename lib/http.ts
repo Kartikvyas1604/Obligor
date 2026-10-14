@@ -17,12 +17,21 @@ export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
   readonly details?: unknown;
+  /** Extra response headers to set (e.g. Retry-After / RateLimit-* on 429). */
+  readonly headers?: Record<string, string>;
 
-  constructor(status: number, code: string, message: string, details?: unknown) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    details?: unknown,
+    headers?: Record<string, string>,
+  ) {
     super(message);
     this.status = status;
     this.code = code;
     this.details = details;
+    this.headers = headers;
   }
 
   static badRequest(message: string, details?: unknown) {
@@ -36,8 +45,8 @@ export class ApiError extends Error {
   static notFound(message = "Not found") {
     return new ApiError(404, "NOT_FOUND", message);
   }
-  static tooMany(message = "Too many requests — slow down and retry shortly") {
-    return new ApiError(429, "RATE_LIMITED", message);
+  static tooMany(message = "Too many requests — slow down and retry shortly", headers?: Record<string, string>) {
+    return new ApiError(429, "RATE_LIMITED", message, undefined, headers);
   }
   static payloadTooLarge(limitMb: number) {
     return new ApiError(413, "PAYLOAD_TOO_LARGE", `Request body exceeds the ${limitMb}MB limit`);
@@ -104,6 +113,11 @@ interface Bucket {
 const globalForBuckets = globalThis as unknown as { __obligorBuckets?: Map<string, Bucket> };
 const buckets: Map<string, Bucket> = (globalForBuckets.__obligorBuckets ??= new Map());
 
+/** Hard cap on tracked keys so a spray of distinct keys can't grow the map forever. */
+const MAX_BUCKETS = 20_000;
+/** Idle buckets (full, untouched for this long) are evictable first. */
+const BUCKET_IDLE_MS = 10 * 60 * 1000;
+
 function refill(bucket: Bucket, capacity: number, windowMs: number) {
   const now = Date.now();
   const refillRate = capacity / windowMs; // tokens per ms
@@ -115,8 +129,36 @@ function refill(bucket: Bucket, capacity: number, windowMs: number) {
 }
 
 /**
+ * Evict full, idle buckets. Iterates insertion order (Map is ordered) so the
+ * oldest keys are considered first, and stops as soon as it has freed enough.
+ */
+function sweep(targetFree: number) {
+  const now = Date.now();
+  let freed = 0;
+  for (const [key, bucket] of buckets) {
+    if (freed >= targetFree) break;
+    const full = bucket.tokens >= 1;
+    const idle = now - bucket.lastRefillMs > BUCKET_IDLE_MS;
+    if (full && idle) {
+      buckets.delete(key);
+      freed += 1;
+    }
+  }
+  // Still over budget (every bucket is actively limited): drop oldest entries.
+  if (buckets.size > MAX_BUCKETS) {
+    let dropped = 0;
+    const excess = buckets.size - MAX_BUCKETS;
+    for (const key of buckets.keys()) {
+      if (dropped >= excess) break;
+      buckets.delete(key);
+      dropped += 1;
+    }
+  }
+}
+
+/**
  * Consume one token from a per-key bucket. Returns headers that describe
- * remaining quota, or throws a 429 ApiError when the bucket is empty.
+ * remaining quota, or throws a 429 ApiError (with Retry-After) when empty.
  */
 export function rateLimit(key: string, capacity: number, windowMs: number) {
   const bucket = buckets.get(key) ?? { tokens: capacity, lastRefillMs: Date.now() };
@@ -124,16 +166,23 @@ export function rateLimit(key: string, capacity: number, windowMs: number) {
   bucket.tokens -= 1;
   buckets.set(key, bucket);
 
+  if (buckets.size > MAX_BUCKETS) sweep(Math.ceil(MAX_BUCKETS * 0.1));
+
   const remaining = Math.max(0, Math.floor(bucket.tokens));
+  const resetSecs = Math.ceil(windowMs / 1000);
   const headers: Record<string, string> = {
     "RateLimit-Limit": String(capacity),
     "RateLimit-Remaining": String(remaining),
-    "RateLimit-Reset": String(Math.ceil(windowMs / 1000)),
+    "RateLimit-Reset": String(resetSecs),
   };
 
   if (bucket.tokens < 0) {
+    // Seconds until a full token is available again.
+    const refillRate = capacity / windowMs; // tokens per ms
+    const waitMs = Math.ceil(Math.abs(bucket.tokens) / refillRate);
+    const retryAfter = Math.max(1, Math.ceil(waitMs / 1000));
     log.warn("rate limit exceeded", { key });
-    throw ApiError.tooMany();
+    throw ApiError.tooMany(undefined, { ...headers, "Retry-After": String(retryAfter) });
   }
   return headers;
 }
@@ -180,6 +229,9 @@ export function errorResponse(err: unknown): NextResponse {
 
   const res = NextResponse.json(body, { status });
   res.headers.set("X-Request-Id", requestId);
+  if (err instanceof ApiError && err.headers) {
+    for (const [k, v] of Object.entries(err.headers)) res.headers.set(k, v);
+  }
   return res;
 }
 
